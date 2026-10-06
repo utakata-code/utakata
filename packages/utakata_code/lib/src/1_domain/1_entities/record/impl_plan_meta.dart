@@ -18,6 +18,60 @@ enum ImplTestStatus { notRequired, todo, inProgress, review, done }
 
 enum ImplPlanBasis { clientAgreed, developerJudgment }
 
+/// 計画の**種別**(v1.8.0)。issue / コミットのプレフィックスと同じ語彙。
+///
+/// `impl new` は長らく feature 名を必須にしてきたが、それは分類のためではなく
+/// `enforcement.impl_plan` のゲートが plan.yaml の feature 名と照合するため。
+/// ディレクトリ整理や文書更新のように feature に対応しない作業の計画書に
+/// 置き場が無かったので、種別を前置きして「feature を対象にする計画か」を
+/// 明示できるようにした。引数を任意にしなかったのは、「計画はあるのに
+/// feature 名が無いので apply が止まる」事故を避けるため。
+enum ImplPlanKind {
+  feat,
+  fix,
+  refactor,
+  docs,
+  chore,
+  test;
+
+  /// feature(`lib/features/<name>`)を対象にする種別か。
+  /// ゲートの照合対象になるのはこれらだけ。
+  bool get targetsFeature => this == feat || this == fix;
+
+  static const _byName = {
+    'feat': feat,
+    'fix': fix,
+    'refactor': refactor,
+    'docs': docs,
+    'chore': chore,
+    'test': test,
+  };
+
+  static Iterable<String> get names => _byName.keys;
+
+  /// `kind:` の値を読む。未知の値は例外(黙って feat にすると、ゲートの
+  /// 対象外のつもりで書いた計画が feature 扱いになる)。
+  static ImplPlanKind fromString(String raw) {
+    final kind = _byName[raw];
+    if (kind == null) {
+      throw ArgumentError('Unknown impl plan kind: "$raw" '
+          '(use one of ${names.join(", ")})');
+    }
+    return kind;
+  }
+
+  /// `impl new <spec>` の引数 `[kind:]target` を分解する。
+  /// 種別が無ければ [feat](1.7.x までの `impl new <feature>` と同じ意味)。
+  static ({ImplPlanKind kind, String target}) parseSpec(String spec) {
+    final colon = spec.indexOf(':');
+    if (colon < 0) return (kind: feat, target: spec);
+    return (
+      kind: fromString(spec.substring(0, colon)),
+      target: spec.substring(colon + 1),
+    );
+  }
+}
+
 final class ImplPlanOrigin {
   final List<String> agreements;
   final List<String> specs;
@@ -34,7 +88,14 @@ final class ImplPlanOrigin {
 
 final class ImplPlanMeta {
   final String id; // PlanId.value
+
+  /// 計画の対象。[kind] が feature を対象にする種別なら plan.yaml の feature 名、
+  /// そうでなければ作業の対象名(`doc_layout` 等)。キー名は 1.7.x 以前との
+  /// 互換のため `feature` のまま。
   final String feature;
+
+  /// 計画の種別(v1.8.0)。1.7.x 以前のファイルには無いので [ImplPlanKind.feat]。
+  final ImplPlanKind kind;
   final String backlog;
   final ImplPlanStatus status;
   final ImplTestStatus test;
@@ -56,6 +117,7 @@ final class ImplPlanMeta {
   const ImplPlanMeta({
     required this.id,
     required this.feature,
+    this.kind = ImplPlanKind.feat,
     this.backlog = '',
     this.status = ImplPlanStatus.todo,
     this.test = ImplTestStatus.todo,
@@ -72,6 +134,20 @@ final class ImplPlanMeta {
   bool get isComplete =>
       status == ImplPlanStatus.done &&
       (test == ImplTestStatus.done || test == ImplTestStatus.notRequired);
+
+  /// レーン内でのファイル名。
+  ///
+  /// `feat` は 1.7.x までと同じ `PLAN-NNNN_<feature>.md`(種別を入れると
+  /// 既存ファイルが全て「配置違い」になり、CLI を上げただけで移動が走る)。
+  /// それ以外は `PLAN-NNNN_<kind>_<target>.md` で、ファイラ上でも
+  /// feature の計画と見分けがつく。
+  String get fileName => kind == ImplPlanKind.feat
+      ? '${id}_$feature.md'
+      : '${id}_${kind.name}_$feature.md';
+
+  /// ボード・一覧での表示名(`refactor:doc_layout` / `login`)。
+  String get displayName =>
+      kind == ImplPlanKind.feat ? feature : '${kind.name}:$feature';
 
   /// null は「据え置き」を意味するため、**値を消す**用途には
   /// `clear...` フラグを使う(逆行時に completed_on や検証済みフラグが
@@ -90,6 +166,7 @@ final class ImplPlanMeta {
       ImplPlanMeta(
         id: id,
         feature: feature,
+        kind: kind,
         backlog: backlog,
         status: status ?? this.status,
         test: test ?? this.test,

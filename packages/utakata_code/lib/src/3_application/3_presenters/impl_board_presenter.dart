@@ -52,7 +52,7 @@ abstract final class ImplBoardPresenter {
           if (plan.origin.agreements.isNotEmpty)
             '根拠: ${plan.origin.agreements.join(", ")}',
         ];
-        buffer.writeln('- **${plan.id}** ${plan.feature}'
+        buffer.writeln('- **${plan.id}** ${plan.displayName}'
             '${notes.isEmpty ? '' : ' — ${notes.join(" / ")}'}');
       }
       buffer.writeln();
@@ -64,5 +64,5 @@ abstract final class ImplBoardPresenter {
   /// 端末表示用(1行1計画)。
   static String renderLine(ImplPlanMeta plan) =>
       '${plan.id}  [${ImplPlanMeta.statusToString(plan.status)}'
-      ' / test:${ImplPlanMeta.testToString(plan.test)}]  ${plan.feature}';
+      ' / test:${ImplPlanMeta.testToString(plan.test)}]  ${plan.displayName}';
 }

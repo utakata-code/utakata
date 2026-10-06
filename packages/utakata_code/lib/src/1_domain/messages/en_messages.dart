@@ -467,7 +467,9 @@ class EnMessages implements CliMessages {
   @override
   String get cmdImplDesc => 'Feature implementation plan management';
   @override
-  String get cmdImplNewDesc => 'Create a new implementation plan';
+  String get cmdImplNewDesc =>
+      'Create a new implementation plan ([kind:]<target>; kind is '
+      'feat|fix|refactor|docs|chore|test, default feat)';
   @override
   String get cmdImplListDesc => 'List implementation plans';
   @override
@@ -524,7 +526,8 @@ class EnMessages implements CliMessages {
   String get optImplSkipReason => 'Why testing is unnecessary';
   @override
   String get implFeatureRequired =>
-      'Specify a feature name: utakata impl new <feature>';
+      'Specify a target: utakata impl new [kind:]<target> '
+      '(e.g. login / refactor:doc_layout)';
   @override
   String get implIdRequired =>
       'Specify a plan ID (see utakata impl list)';

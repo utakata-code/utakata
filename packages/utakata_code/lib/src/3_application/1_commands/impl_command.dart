@@ -126,15 +126,18 @@ class _ImplNewCommand extends BaseCommand {
       Logger.error(_msg.implFeatureRequired);
       return 64;
     }
+    // v1.8.0: `[kind:]target`。種別が無ければ feat(1.7.x と同じ)。
+    final spec = ImplPlanKind.parseSpec(argResults!.rest.first);
     // feature add / plan.yaml と同じ正規化を通す(ゲート判定が名前の
     // 表記ゆれで食い違わないように)
-    final feature = CaseConverter.toSnakeCase(argResults!.rest.first);
+    final feature = CaseConverter.toSnakeCase(spec.target);
     final basisRaw = argResults!['basis'] as String?;
     final projectDir = Directory.current.path;
 
     final id = await _usecase.create(
       projectDir,
       feature: feature,
+      kind: spec.kind,
       backlog: argResults!['backlog'] as String,
       agreements: _splitCsv(argResults!['agreement'] as String?),
       specs: _splitCsv(argResults!['spec'] as String?),
@@ -149,8 +152,9 @@ class _ImplNewCommand extends BaseCommand {
     );
 
     await _refreshBoard(_usecase, projectDir, _writeFile);
+    final created = (await _usecase.find(projectDir, id))!;
     Logger.success(_msg.implNewDone(
-        id, 'doc/impl/${ImplLane.todo.dirName}/${id}_$feature.md'));
+        id, 'doc/impl/${ImplLane.todo.dirName}/${created.fileName}'));
     return 0;
   }
 
@@ -206,6 +210,7 @@ class _ImplListCommand extends BaseCommand {
           {
             'id': plan.id,
             'feature': plan.feature,
+            'kind': plan.kind.name,
             'status': ImplPlanMeta.statusToString(plan.status),
             'test': ImplPlanMeta.testToString(plan.test),
             'lane': ImplLane.ofMeta(plan).dirName,

@@ -20,6 +20,7 @@ class ImplPlanUsecase {
   Future<String> create(
     String projectDir, {
     required String feature,
+    ImplPlanKind kind = ImplPlanKind.feat,
     String backlog = '',
     List<String> agreements = const [],
     List<String> specs = const [],
@@ -36,6 +37,7 @@ class ImplPlanUsecase {
     final meta = ImplPlanMeta(
       id: id,
       feature: feature,
+      kind: kind,
       backlog: backlog,
       status: ImplPlanStatus.todo,
       test: ImplTestStatus.todo,

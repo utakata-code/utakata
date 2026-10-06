@@ -451,7 +451,8 @@ class JaMessages implements CliMessages {
   @override
   String get cmdImplDesc => 'feature 実装計画の管理';
   @override
-  String get cmdImplNewDesc => '実装計画書を新規作成する';
+  String get cmdImplNewDesc =>
+      '実装計画書を新規作成する([kind:]<target>。kind は feat|fix|refactor|docs|chore|test、省略時 feat)';
   @override
   String get cmdImplListDesc => '実装計画の一覧を表示する';
   @override
@@ -504,7 +505,9 @@ class JaMessages implements CliMessages {
   @override
   String get optImplSkipReason => 'テスト不要とする理由';
   @override
-  String get implFeatureRequired => 'feature 名を指定してください: utakata impl new <feature>';
+  String get implFeatureRequired =>
+      '対象を指定してください: utakata impl new [kind:]<target>'
+      '(例: login / refactor:doc_layout)';
   @override
   String get implIdRequired => '実装計画 ID を指定してください(utakata impl list で確認)';
   @override

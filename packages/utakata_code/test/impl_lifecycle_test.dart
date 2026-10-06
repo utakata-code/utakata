@@ -324,6 +324,83 @@ created: "2026-07-01"
     });
   });
 
+  group('種別プレフィックス(v1.8.0, #24)', () {
+    test('種別無しは feat として読む(1.7.x の impl new <feature> と同じ)', () {
+      final spec = ImplPlanKind.parseSpec('login');
+      expect(spec.kind, ImplPlanKind.feat);
+      expect(spec.target, 'login');
+    });
+
+    test('kind:target を分解する。未知の種別は拒否', () {
+      final spec = ImplPlanKind.parseSpec('refactor:doc_layout');
+      expect(spec.kind, ImplPlanKind.refactor);
+      expect(spec.target, 'doc_layout');
+      expect(() => ImplPlanKind.parseSpec('feature:login'), throwsArgumentError,
+          reason: 'feat ではなく feature と書いた誤りを黙って通さない');
+    });
+
+    test('feat のファイル名は 1.7.x と同じ、それ以外は種別が入る', () async {
+      final featId = await newPlan('login');
+      expect(existsIn(ImplLane.todo, '${featId}_login.md'), isTrue);
+
+      final refId = await usecase.create(dir.path,
+          feature: 'doc_layout',
+          kind: ImplPlanKind.refactor,
+          now: now,
+          bodyTemplate: '# x\n');
+      expect(existsIn(ImplLane.todo, '${refId}_refactor_doc_layout.md'), isTrue);
+
+      await usecase.setStatus(dir.path, refId, ImplPlanStatus.inProgress,
+          now: now);
+      expect(
+          existsIn(ImplLane.inProgress, '${refId}_refactor_doc_layout.md'),
+          isTrue,
+          reason: 'レーン移動後も種別付きの名前を保つ');
+    });
+
+    test('kind の無い 1.7.x のファイルは feat として読み、配置違いにならない',
+        () async {
+      File('${dir.path}/doc/impl/2_in_progress/PLAN-0004_login.md')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('---\nid: "PLAN-0004"\nfeature: "login"\n'
+            'status: "in_progress"\ncreated: "2026-08-11"\n---\n');
+
+      final plan = (await usecase.find(dir.path, 'PLAN-0004'))!;
+      expect(plan.kind, ImplPlanKind.feat);
+      expect(await usecase.detectMisplaced(dir.path), isEmpty,
+          reason: 'CLI を上げただけでファイルが動いてはいけない');
+    });
+
+    test('ゲートは feat / fix だけを数える', () {
+      ImplPlanMeta plan(String id, String feature, ImplPlanKind kind) =>
+          ImplPlanMeta(
+              id: id, feature: feature, kind: kind, created: DateTime(2026));
+      final plans = [
+        plan('PLAN-0001', 'login', ImplPlanKind.feat),
+        plan('PLAN-0002', 'payment', ImplPlanKind.fix),
+        plan('PLAN-0003', 'search', ImplPlanKind.refactor),
+        plan('PLAN-0004', 'readme', ImplPlanKind.docs),
+      ];
+      expect(ImplPlanGate.featuresWithPlan(plans), {'login', 'payment'},
+          reason: 'refactor:search があっても search feature の計画にはならない');
+    });
+
+    test('displayName は feat なら対象名のみ、それ以外は kind:target', () {
+      expect(
+          ImplPlanMeta(id: 'PLAN-0001', feature: 'login', created: DateTime(2026))
+              .displayName,
+          'login');
+      expect(
+          ImplPlanMeta(
+                  id: 'PLAN-0002',
+                  feature: 'readme',
+                  kind: ImplPlanKind.docs,
+                  created: DateTime(2026))
+              .displayName,
+          'docs:readme');
+    });
+  });
+
   group('ImplPlanGate', () {
     test('archived 以外の計画があれば「計画あり」', () {
       final plans = [

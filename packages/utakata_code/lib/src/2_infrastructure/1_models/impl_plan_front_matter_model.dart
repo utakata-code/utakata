@@ -42,6 +42,10 @@ abstract final class ImplPlanFrontMatterModel {
     return ImplPlanMeta(
       id: map['id'] as String,
       feature: map['feature'] as String,
+      // v1.8.0: 種別。無ければ feat(1.7.x 以前のファイルは全て feature の計画)
+      kind: map['kind'] == null
+          ? ImplPlanKind.feat
+          : ImplPlanKind.fromString(map['kind'].toString()),
       backlog: (map['backlog'] as String?) ?? '',
       status: ImplPlanMeta.statusFromString((map['status'] as String?) ?? 'todo'),
       test: test,
@@ -66,6 +70,7 @@ abstract final class ImplPlanFrontMatterModel {
   static Map<String, dynamic> toMap(ImplPlanMeta meta) => {
         'id': meta.id,
         'feature': meta.feature,
+        'kind': meta.kind.name,
         if (meta.backlog.isNotEmpty) 'backlog': meta.backlog,
         'status': ImplPlanMeta.statusToString(meta.status),
         'created': meta.created.toIso8601String().substring(0, 10),

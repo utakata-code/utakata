@@ -23,8 +23,6 @@ class ImplPlanRepositoryImpl implements ImplPlanRepository {
   // 区切り文字が混在し、期待パスと実パスの比較が常に不一致になる)。
   static String get _implDir => p.join('doc', 'impl');
 
-  String _fileName(String id, String feature) => '${id}_$feature.md';
-
   /// `doc/impl/` 配下の全 .md を走査する。
   ///
   /// 読めなかったファイル(frontmatter の構文エラー・必須項目欠落)は
@@ -69,7 +67,7 @@ class ImplPlanRepositoryImpl implements ImplPlanRepository {
   String _expectedRelativePath(ImplPlanMeta meta) => p.join(
         _implDir,
         ImplLane.ofMeta(meta).dirName,
-        _fileName(meta.id, meta.feature),
+        meta.fileName,
       );
 
   @override
