@@ -1,8 +1,10 @@
 # doc/impl/ — feature 実装計画のライフサイクル
 
-規模のある feature は、コードを書く前に**実装計画**を作ります。
+規模のある変更は、コードを書く前に**実装計画**を作ります。
 計画は `doc/impl/<レーン>/PLAN-NNNN_{feature}.md` に置かれ、
 状態が変わるとファイルがレーン(サブディレクトリ)間を移動します。
+feature に紐づかない作業(リファクタリング・文書整理)は種別を付けて
+`PLAN-NNNN_refactor_{target}.md` のように作ります(v1.8.0)。
 
 ```sh
 utakata doc show impl    # このドキュメントを表示
@@ -61,11 +63,111 @@ utakata impl sync             # frontmatter に合わせて再配置
 
 ---
 
+## 計画書は「計画」と「実施記録」の2領域(v1.8.0)
+
+本文はマーカー行 `<!-- utakata:log -->` で上下に分かれます。
+
+```md
+# 実装計画
+## 1. 背景・目的
+…(計画。impl start で凍結される)…
+
+<!-- utakata:log -->
+## 実施記録
+
+- 2026-10-07 10:12 (haruma) status: todo → in_progress
+- 2026-10-07 11:40 (agent:claude) 既存の DataSource を流用する方針に決定
+- 2026-10-08 09:00 (haruma) revised (#1): 性能要件の追加で方針変更
+```
+
+| 領域 | 誰がいつ書くか | CLI の扱い |
+|---|---|---|
+| **計画**(マーカーより上) | `todo` の間は自由に編集。`impl start` で**凍結** | 指紋(`plan_digest`)を記録し、変更を検知する |
+| **実施記録**(マーカーより下) | いつでも。**ファイルを直接編集せず** `impl note` で追記 | 日時と記録者を付けて 1 行追記。状態遷移も自動で 1 行残る |
+
+分けている理由: 1本の計画書が「計画 → 実施記録 → 追試 → 次ビルドの確認項目」と
+時系列で伸び、どこが計画でどこが記録か読めなくなるためです。記録を CLI 経由に
+するのは `records.agent_write: append` と同じ考え方で、日時と記録者が必ず付き、
+過去の記録を書き換える経路がありません。
+
+CLI が本文を解釈するのは**このマーカー 1 行を探すことだけ**です。節構造は
+解析しません。マーカーの無い 1.7.x 以前のファイルは全体が計画として扱われ、
+最初の追記(`impl note` または状態遷移)で末尾に領域が作られます。
+
+```sh
+utakata impl note PLAN-0001 "既存の DataSource を流用する方針に決定"
+cat memo.txt | utakata impl note PLAN-0001        # stdin からも読める
+```
+
+記録者は環境変数 `UTAKATA_ACTOR`(無ければ `USER`)で決まります。
+`claude init` が生成する settings.json は `agent:claude` を渡すので、
+AI の記録は人間の記録と区別できます。
+
+---
+
+## 凍結と改訂(v1.8.0)
+
+計画書は仕様書ではないので、常に最新である必要はありません。むしろ
+「着手時に何を計画していたか」が残っていることに価値があります。
+
+- `impl start`(`todo` を離れる最初の遷移)で計画部分の指紋を `plan_digest` に記録します
+- 以後、計画部分が書き換えられていると**状態遷移が止まります**(`archive` は除く)。
+  `utakata doctor` も受理されていない書き換えを報告します
+- 止めるのは遷移であって編集そのものではありません。誤字 1 つ直すのに
+  新しい計画書が要る運用にはしていません
+
+凍結後に計画を変えたくなったら、変更の大きさで 2 つに分けます。
+
+| 変更 | やること |
+|---|---|
+| 小さな修正(誤字・補足・手順の入れ替え) | 計画部分を直したうえで `utakata impl revise <ID> --reason "理由"`。`revisions` が +1 され、理由が実施記録に残る |
+| 設計方針・スコープが変わる | 凍結した計画書に上書きせず、`utakata impl new <target> --supersedes <旧ID>` で新しい計画書を切る。旧計画は `impl archive`。ボードに双方向で「置き換え」が表示される |
+
+```sh
+utakata impl revise PLAN-0001 --reason "性能要件の追加で方針変更"
+utakata impl new login --supersedes PLAN-0001
+```
+
+`revise` は変更が無いとき・`todo` のまま(まだ凍結されていない)・理由が
+無いときは拒否します。回数がボードに出るので、「何度も計画が変わった
+feature」が見えます。
+
+指紋は改行コード・行末の空白・末尾の空行を正規化してから計算するので、
+エディタの自動整形で「変更あり」にはなりません。
+
+---
+
+## 種別(v1.8.0)
+
+`impl new` の引数は `[kind:]<target>` です。
+
+```sh
+utakata impl new login                   # feat:login と同じ(1.7.x までと同じ書き方)
+utakata impl new fix:login               # login の不具合修正
+utakata impl new refactor:doc_layout     # feature に紐づかない作業
+utakata impl new docs:readme
+```
+
+| kind | 対象 | ファイル名 | `enforcement.impl_plan` の照合 |
+|---|---|---|---|
+| `feat`(既定)/ `fix` | plan.yaml の feature | `PLAN-NNNN_<feature>.md` | **対象** |
+| `refactor` / `docs` / `chore` / `test` | 作業の対象名 | `PLAN-NNNN_<kind>_<target>.md` | 対象外 |
+
+引数を任意にせず種別を前置きさせるのは、feature 名がゲートの照合キーだから
+です。`refactor:login` の計画があっても、login feature の実装計画があるとは
+見なしません。
+
+---
+
 ## コマンド
 
 ```sh
 # 作成
-utakata impl new <feature> [--agreement AGR-003] [--spec <path>] [--basis client_agreed]
+utakata impl new [kind:]<target> [--agreement AGR-003] [--spec <path>] [--basis client_agreed] [--supersedes PLAN-0001]
+
+# 記録・改訂
+utakata impl note <ID> "本文"             # 実施記録を 1 件追記(stdin 可)
+utakata impl revise <ID> --reason "..."  # 凍結後の書き換えを改訂として受理
 
 # 実装軸
 utakata impl start <ID>      # → in_progress
@@ -135,7 +237,9 @@ enforcement:
   わけではないため)
 
 計画の有無は「archived 以外の計画が1つでもあるか」で判定します。`done` でも
-満たします — 細かすぎる要求は運用を殺すためです。
+満たします — 細かすぎる要求は運用を殺すためです。数えるのは種別が `feat` /
+`fix` の計画だけで、`refactor:login` のような計画は login の実装計画とは
+見なしません(v1.8.0)。
 
 CLI を通さずに直接コードを書いた場合はゲートできないので、
 `utakata doctor` が「実装があるのに実装計画が無い feature」を情報として
@@ -148,7 +252,8 @@ CLI を通さずに直接コードを書いた場合はゲートできないの�
 ```yaml
 ---
 id: PLAN-0001
-feature: login
+feature: login             # kind が feat/fix なら feature 名、それ以外は作業の対象名
+kind: feat                 # feat | fix | refactor | docs | chore | test(v1.8.0)
 status: in_progress
 created: 2026-08-11
 origin:                    # 根拠へのリンク
@@ -161,15 +266,35 @@ test:
   static: pending          # 自動検証(flutter analyze / utakata check)
   on_device: pending       # 実機確認
 completed_on: 2026-08-20   # done のときだけ書かれる(戻すと消える)
+plan_digest: 3f9a…         # impl start で記録される計画部分の指紋(v1.8.0)
+revisions: 1               # impl revise の回数。0 なら書かれない(v1.8.0)
+supersedes: PLAN-0001      # 置き換えた旧計画(--supersedes を付けたときだけ)(v1.8.0)
 ---
 ```
 
 `skip_reason` は `test: not_required` のときだけ書かれ、他の状態へ移ると消えます。
 `static` / `on_device` は `impl test done` で `done` になり、差し戻すと `pending` に戻ります。
 
-本文(Markdown)は人間/AI の自由記述領域です。**frontmatter は CLI が
-機械管理する**ので手で編集せず、コマンドで遷移させてください
-(編集してしまった場合は `utakata impl sync` で配置を戻せます)。
+本文(Markdown)のうち計画部分は人間/AI の記述領域、実施記録は CLI 経由の
+追記領域です。**frontmatter は CLI が機械管理する**ので手で編集せず、
+コマンドで遷移させてください(編集してしまった場合は `utakata impl sync` で
+配置を戻せます)。
+
+---
+
+## v1.7.x からの移行
+
+**何もしなくても読めます。** 1.7.x で作った計画書は:
+
+- `kind` が無いので `feat` として読まれます。ファイル名は変わらず、移動も起きません
+- `plan_digest` が無いので未凍結として読まれ、次の状態遷移で凍結されます
+- マーカーが無いので全体が計画として扱われ、最初の追記で末尾に実施記録の
+  領域が作られます(計画部分の指紋は変わりません)
+
+`claude init` が生成する `utakata-impl-flow` スキルは新しいフローに
+書き換わっています。既存プロジェクトでは古いスキルが残るので、
+`utakata doctor` の案内に従って再生成してください
+(`doc/skills/utakata-upgrade/SKILL.md` に手順があります)。
 
 ---
 

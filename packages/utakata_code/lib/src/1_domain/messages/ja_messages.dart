@@ -460,7 +460,7 @@ class JaMessages implements CliMessages {
   @override
   String get cmdImplArchiveDesc => '完了済みの実装計画を archive/ へ移動する';
   @override
-  String implNewDone(String id, String path) => '✅ $id を作成しました: $path';
+  String implNewDone(String id, String path) => '$id を作成しました: $path';
   @override
   String get implListEmpty => '実装計画が見つかりませんでした';
   @override
@@ -566,13 +566,13 @@ class JaMessages implements CliMessages {
   String get implNoteTextRequired =>
       '記録の本文を指定してください: utakata impl note <ID> "本文"(または stdin)';
   @override
-  String implNoteDone(String id) => '✅ $id に記録を追記しました';
+  String implNoteDone(String id) => '$id に記録を追記しました';
   @override
   String get implReviseReasonRequired =>
       '--reason で変更理由を指定してください(改訂の記録に残ります)';
   @override
   String implReviseDone(String id, int revisions) =>
-      '✅ $id を改訂として受理しました(改訂 $revisions 回目)';
+      '$id を改訂として受理しました(改訂 $revisions 回目)';
   @override
   String implPlansDrifted(int count, String samples) =>
       '実装計画 $count 件が凍結後に書き換えられています($samples)。'

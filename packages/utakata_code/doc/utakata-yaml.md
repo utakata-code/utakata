@@ -224,7 +224,8 @@ enforcement:
 `on` にすると `utakata apply --scope feature` と `utakata feature add` が
 **feature 単位で**ゲートし、実装計画の無い feature のスキャフォールドを
 スキップします(他の feature は通常どおり生成され、スキップがあれば exit 1)。
-既にディスクにある feature には作用しません。
+既にディスクにある feature には作用しません。数えるのは種別が `feat` / `fix` の
+計画だけです(`refactor:` 等は feature の実装計画と見なしません。v1.8.0)。
 
 詳細は [impl-plan.md](impl-plan.md)(`utakata doc show impl`)を参照してください。
 

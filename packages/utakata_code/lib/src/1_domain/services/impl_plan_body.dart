@@ -85,7 +85,12 @@ abstract final class ImplPlanBody {
       hash ^= unit;
       hash *= 0x100000001b3;
     }
-    return hash.toUnsigned(64).toRadixString(16).padLeft(16, '0');
+    // 64bit の値は負になりうる(toUnsigned(64) では正に戻せない)ので、
+    // 32bit ずつ符号なしで 16 進にする
+    final hi = (hash >>> 32) & 0xFFFFFFFF;
+    final lo = hash & 0xFFFFFFFF;
+    return hi.toRadixString(16).padLeft(8, '0') +
+        lo.toRadixString(16).padLeft(8, '0');
   }
 
   /// マーカー行の先頭位置(行頭にあるものだけを境界と見なす)。

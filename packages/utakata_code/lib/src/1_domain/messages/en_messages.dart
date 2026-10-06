@@ -477,7 +477,7 @@ class EnMessages implements CliMessages {
   @override
   String get cmdImplArchiveDesc => 'Move a done implementation plan to archive/';
   @override
-  String implNewDone(String id, String path) => '✅ Created $id: $path';
+  String implNewDone(String id, String path) => 'Created $id: $path';
   @override
   String get implListEmpty => 'No implementation plans found';
   @override
@@ -590,13 +590,13 @@ class EnMessages implements CliMessages {
   String get implNoteTextRequired =>
       'Specify the note text: utakata impl note <ID> "text" (or via stdin)';
   @override
-  String implNoteDone(String id) => '✅ Appended a note to $id';
+  String implNoteDone(String id) => 'Appended a note to $id';
   @override
   String get implReviseReasonRequired =>
       'Specify --reason (it is written into the plan\'s log)';
   @override
   String implReviseDone(String id, int revisions) =>
-      '✅ Accepted the changes to $id as revision $revisions';
+      'Accepted the changes to $id as revision $revisions';
   @override
   String implPlansDrifted(int count, String samples) =>
       '$count implementation plan(s) were edited after being frozen '

@@ -131,7 +131,8 @@ features:
 | `utakata message list\|show\|render\|link` | 一覧 / 全文表示 / `doc/preview/messages/` の再生成 / 要約ログ・合意への紐付け |
 | `utakata agree add --title "..." --kind client_agreement\|internal_decision\|tentative [--amount] [--from <msg id>]` | 合意を記録する(`doc/records/agreements.jsonl`・追記専用) |
 | `utakata agree status <id> <status>` / `correct <id>` / `reflect <id> --plan\|--spec` / `list [--unreflected]` | 合意の状態更新・訂正(supersede)・反映記録・未反映合意の一覧 |
-| `utakata impl new <feature> [--agreement] [--spec] [--basis]` | 実装計画を作成する(`doc/impl/1_todo/PLAN-NNNN_{feature}.md`) |
+| `utakata impl new [kind:]<target> [--agreement] [--spec] [--basis] [--supersedes]` | 実装計画を作成する(`doc/impl/1_todo/PLAN-NNNN_{feature}.md`)。`kind` は `feat`(既定)/`fix`/`refactor`/`docs`/`chore`/`test`。`--supersedes` で旧計画を置き換える |
+| `utakata impl note <id> "本文"` / `revise <id> --reason` | 実施記録を追記(stdin 可)/ 凍結後に書き換えた計画を改訂として受理 |
 | `utakata impl start\|review\|done\|archive <id>` | 実装軸を進める。ファイルは対応するレーンへ移動する |
 | `utakata impl test start\|review\|done\|todo\|skip <id>` | 検証軸を進める(実装が `done` になってから。`skip --reason` はテスト不要の明示) |
 | `utakata impl list [--status] [--test] [--lane] [--json]` / `board` / `sync [--dry-run]` | 一覧 / レーン別ボード表示(`doc/preview/impl_board.md` を再生成)/ frontmatter に合わせた再配置 |

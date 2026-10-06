@@ -524,12 +524,23 @@ created: "2026-07-01"
       await usecase.setStatus(dir.path, id, ImplPlanStatus.inProgress, now: now);
       final frozen = (await usecase.find(dir.path, id))!;
       expect(frozen.isFrozen, isTrue);
-      expect(frozen.planDigest, hasLength(16));
+      expect(frozen.planDigest, matches(RegExp(r'^[0-9a-f]{16}$')));
     });
 
     test('digest は改行コード・行末空白・末尾空行の違いを無視する', () {
       expect(ImplPlanBody.digest('a\nb\n'), ImplPlanBody.digest('a  \r\nb\r\n\n\n'));
       expect(ImplPlanBody.digest('a\nb\n'), isNot(ImplPlanBody.digest('a\nc\n')));
+    });
+
+    test('digest は常に符号なし 16 桁の 16 進(負のハッシュでも "-" が付かない)', () {
+      // 短い入力を総当たりして、上位ビットが立つ(= 負になる)値を必ず踏む
+      var sawHighBit = false;
+      for (var i = 0; i < 512; i++) {
+        final digest = ImplPlanBody.digest('plan $i');
+        expect(digest, matches(RegExp(r'^[0-9a-f]{16}$')), reason: 'plan $i');
+        if (int.parse(digest.substring(0, 1), radix: 16) >= 8) sawHighBit = true;
+      }
+      expect(sawHighBit, isTrue, reason: '負の値を踏まないテストでは意味が無い');
     });
 
     test('凍結後に計画部分を書き換えると遷移が止まる(archive は除く)', () async {
