@@ -20,7 +20,15 @@ abstract interface class ImplPlanRepository {
 
   /// frontmatter を更新し、**続けて正しいレーンへ移動する**。
   /// 移動が起きた場合は移動先の相対パスを返す(起きなければ null)。
-  Future<String?> update(String projectDir, ImplPlanMeta meta);
+  ///
+  /// [logEntry] を渡すと、本文の記録領域([ImplPlanBody.marker] より下)に
+  /// 1 件追記する(v1.8.0)。計画部分には触れない。
+  Future<String?> update(String projectDir, ImplPlanMeta meta,
+      {String? logEntry});
+
+  /// 本文(frontmatter を除いた Markdown)をそのまま返す(v1.8.0)。
+  /// 凍結後の変更検知と `note` の追記位置の判定に使う。
+  Future<String> readBody(String projectDir, String id);
 
   /// 走査の生結果(読めなかったファイル・重複 ID を含む)。
   Future<ImplScanResult> scanAll(String projectDir);

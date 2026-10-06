@@ -6,6 +6,7 @@ import 'package:args/command_runner.dart';
 import '../../1_domain/1_entities/record/impl_plan_meta.dart';
 import '../../1_domain/3_usecases/impl_plan_usecase.dart';
 import '../../1_domain/messages/cli_messages.dart';
+import '../../1_domain/services/actor_resolver.dart';
 import '../../1_domain/services/case_converter.dart';
 import '../../1_domain/services/impl_lane.dart';
 import '../3_presenters/impl_board_presenter.dart';
@@ -35,6 +36,7 @@ class ImplCommand extends Command<int> {
     addSubcommand(_ImplTestCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplArchiveCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplSyncCommand(usecase, _msg, writeFile));
+    addSubcommand(_ImplNoteCommand(usecase, _msg));
   }
 
   @override
@@ -75,7 +77,14 @@ const _bodyTemplate = '''
 ## 7. 文書更新
 
 ## 8. スコープ外
+
+<!-- utakata:log -->
+## 実施記録
+
 ''';
+
+/// 記録者(`UTAKATA_ACTOR` → `USER`)。records と同じ解決順。
+String _actor() => ActorResolver.resolve(Platform.environment);
 
 /// 状態を変えたら常にボードを作り直す(プレビューを手で再生成させない)。
 Future<void> _refreshBoard(
@@ -282,7 +291,7 @@ abstract class _StatusTransitionCommand extends BaseCommand {
     final projectDir = Directory.current.path;
     final result = await usecase.setStatus(
         projectDir, argResults!.rest.first, target,
-        now: DateTime.now());
+        now: DateTime.now(), actor: _actor());
     await _refreshBoard(usecase, projectDir, writeFile);
     _reportTransition(result, msg);
     return 0;
@@ -415,10 +424,52 @@ class _TestTransitionCommand extends BaseCommand {
       skipReason: _target == ImplTestStatus.notRequired
           ? argResults!['reason'] as String?
           : null,
+      now: DateTime.now(),
+      actor: _actor(),
     );
     await _refreshBoard(_usecase, projectDir, _writeFile);
     _reportTransition(result, _msg);
     return 0;
+  }
+}
+
+/// `utakata impl note <ID> [text]` — 実施記録を 1 件追記(本文は引数か stdin)
+class _ImplNoteCommand extends BaseCommand {
+  final ImplPlanUsecase _usecase;
+  final CliMessages _msg;
+
+  @override
+  String get name => 'note';
+  @override
+  String get description => _msg.cmdImplNoteDesc;
+
+  _ImplNoteCommand(this._usecase, this._msg);
+
+  @override
+  Future<int> execute() async {
+    final rest = argResults!.rest;
+    if (rest.isEmpty) {
+      Logger.error(_msg.implIdRequired);
+      return 64;
+    }
+    final text = rest.length > 1
+        ? rest.skip(1).join(' ')
+        : await _readStdin();
+    if (text.trim().isEmpty) {
+      Logger.error(_msg.implNoteTextRequired);
+      return 64;
+    }
+    await _usecase.note(Directory.current.path, rest.first, text,
+        now: DateTime.now(), actor: _actor());
+    Logger.success(_msg.implNoteDone(rest.first));
+    return 0;
+  }
+
+  /// 端末に繋がっている(= パイプされていない)stdin は読まない。
+  /// 読みにいくと入力待ちで止まって見える。
+  Future<String> _readStdin() async {
+    if (stdin.hasTerminal) return '';
+    return utf8.decoder.bind(stdin).join();
   }
 }
 

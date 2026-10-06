@@ -1,5 +1,6 @@
 import '../1_entities/record/impl_plan_meta.dart';
 import '../2_repositories/impl_plan_repository.dart';
+import '../services/impl_plan_body.dart';
 
 /// `utakata impl` — feature 実装計画のライフサイクル管理(仕様書 §8)。
 ///
@@ -55,11 +56,15 @@ class ImplPlanUsecase {
       _repo.findById(projectDir, id);
 
   /// 実装軸の遷移。
+  ///
+  /// 遷移は本文の記録領域にも 1 行残す(v1.8.0)。記録領域だけ読めば
+  /// 時系列が追えるようにするため。[actor] は `UTAKATA_ACTOR` 由来の記録者。
   Future<ImplTransition> setStatus(
     String projectDir,
     String id,
     ImplPlanStatus status, {
     required DateTime now,
+    String actor = '',
   }) async {
     final meta = await _require(projectDir, id);
     final done = status == ImplPlanStatus.done;
@@ -69,7 +74,16 @@ class ImplPlanUsecase {
       // done から戻したら完了日は消す(古い日付が残ると嘘になる)
       clearCompletedOn: !done && status != ImplPlanStatus.archived,
     );
-    final movedTo = await _repo.update(projectDir, updated);
+    final movedTo = await _repo.update(
+      projectDir,
+      updated,
+      logEntry: ImplPlanBody.formatEntry(
+        at: now,
+        actor: actor,
+        text: 'status: ${ImplPlanMeta.statusToString(meta.status)} → '
+            '${ImplPlanMeta.statusToString(status)}',
+      ),
+    );
     return ImplTransition(before: meta, after: updated, movedTo: movedTo);
   }
 
@@ -79,6 +93,8 @@ class ImplPlanUsecase {
     String id,
     ImplTestStatus test, {
     String? skipReason,
+    DateTime? now,
+    String actor = '',
   }) async {
     final meta = await _require(projectDir, id);
     final advancing =
@@ -102,13 +118,50 @@ class ImplPlanUsecase {
       onDeviceVerified: complete ? true : null,
       clearVerified: !complete,
     );
-    final movedTo = await _repo.update(projectDir, updated);
+    final reason = (test == ImplTestStatus.notRequired &&
+            skipReason != null &&
+            skipReason.isNotEmpty)
+        ? ' ($skipReason)'
+        : '';
+    final movedTo = await _repo.update(
+      projectDir,
+      updated,
+      logEntry: ImplPlanBody.formatEntry(
+        at: now ?? DateTime.now(),
+        actor: actor,
+        text: 'test: ${ImplPlanMeta.testToString(meta.test)} → '
+            '${ImplPlanMeta.testToString(test)}$reason',
+      ),
+    );
     return ImplTransition(before: meta, after: updated, movedTo: movedTo);
   }
 
   Future<ImplTransition> archive(String projectDir, String id,
-      {required DateTime now}) =>
-      setStatus(projectDir, id, ImplPlanStatus.archived, now: now);
+          {required DateTime now, String actor = ''}) =>
+      setStatus(projectDir, id, ImplPlanStatus.archived,
+          now: now, actor: actor);
+
+  /// 実施記録を 1 件追記する(v1.8.0)。計画部分には触れない。
+  ///
+  /// ファイルを直接編集させず CLI を通すのは records の `append` と同じ
+  /// 理由 — 日時と記録者が必ず付き、過去の記録を書き換える経路が無い。
+  Future<void> note(
+    String projectDir,
+    String id,
+    String text, {
+    required DateTime now,
+    String actor = '',
+  }) async {
+    if (text.trim().isEmpty) {
+      throw ArgumentError('note text must not be empty');
+    }
+    final meta = await _require(projectDir, id);
+    await _repo.update(
+      projectDir,
+      meta,
+      logEntry: ImplPlanBody.formatEntry(at: now, actor: actor, text: text),
+    );
+  }
 
   /// frontmatter に合わせてファイル配置を是正する。
   Future<ImplSyncResult> sync(String projectDir, {bool dryRun = false}) =>

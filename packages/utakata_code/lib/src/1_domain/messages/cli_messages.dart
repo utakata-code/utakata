@@ -274,6 +274,17 @@ abstract interface class CliMessages {
   String implPlansMisplaced(int count, String samples);
   String staleGeneratedSkill(String skillId);
 
+  // ─── impl の計画/記録の分離と凍結 (v1.8.0) ───
+  String get cmdImplNoteDesc;
+  String get cmdImplReviseDesc;
+  String get optImplReviseReason;
+  String get optImplSupersedes;
+  String get implNoteTextRequired;
+  String implNoteDone(String id);
+  String get implReviseReasonRequired;
+  String implReviseDone(String id, int revisions);
+  String implPlansDrifted(int count, String samples);
+
   // ─── summary (v0.9) ───
   String get cmdSummaryDesc;
   String get summaryRenderDone;
