@@ -37,6 +37,7 @@ class ImplCommand extends Command<int> {
     addSubcommand(_ImplArchiveCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplSyncCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplNoteCommand(usecase, _msg));
+    addSubcommand(_ImplReviseCommand(usecase, _msg, writeFile));
   }
 
   @override
@@ -126,7 +127,8 @@ class _ImplNewCommand extends BaseCommand {
       ..addOption('agreement') // カンマ区切り
       ..addOption('spec')
       ..addOption('message')
-      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment']);
+      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment'])
+      ..addOption('supersedes', help: _msg.optImplSupersedes);
   }
 
   @override
@@ -156,6 +158,7 @@ class _ImplNewCommand extends BaseCommand {
           : basisRaw == 'developer_judgment'
               ? ImplPlanBasis.developerJudgment
               : null,
+      supersedes: argResults!['supersedes'] as String?,
       now: DateTime.now(),
       bodyTemplate: _bodyTemplate,
     );
@@ -228,6 +231,9 @@ class _ImplListCommand extends BaseCommand {
               'completed_on': plan.completedOn!.toIso8601String().substring(0, 10),
             if (plan.origin.agreements.isNotEmpty)
               'agreements': plan.origin.agreements,
+            'frozen': plan.isFrozen,
+            if (plan.revisions > 0) 'revisions': plan.revisions,
+            if (plan.supersedes != null) 'supersedes': plan.supersedes,
           },
       ]));
       return 0;
@@ -470,6 +476,41 @@ class _ImplNoteCommand extends BaseCommand {
   Future<String> _readStdin() async {
     if (stdin.hasTerminal) return '';
     return utf8.decoder.bind(stdin).join();
+  }
+}
+
+/// `utakata impl revise <ID> --reason "..."` — 凍結後の書き換えを改訂として受理
+class _ImplReviseCommand extends BaseCommand {
+  final ImplPlanUsecase _usecase;
+  final CliMessages _msg;
+  final Future<void> Function(String path, String content) _writeFile;
+
+  @override
+  String get name => 'revise';
+  @override
+  String get description => _msg.cmdImplReviseDesc;
+
+  _ImplReviseCommand(this._usecase, this._msg, this._writeFile) {
+    argParser.addOption('reason', help: _msg.optImplReviseReason);
+  }
+
+  @override
+  Future<int> execute() async {
+    if (argResults!.rest.isEmpty) {
+      Logger.error(_msg.implIdRequired);
+      return 64;
+    }
+    final reason = argResults!['reason'] as String?;
+    if (reason == null || reason.trim().isEmpty) {
+      Logger.error(_msg.implReviseReasonRequired);
+      return 64;
+    }
+    final projectDir = Directory.current.path;
+    final updated = await _usecase.revise(projectDir, argResults!.rest.first,
+        reason: reason, now: DateTime.now(), actor: _actor());
+    await _refreshBoard(_usecase, projectDir, _writeFile);
+    Logger.success(_msg.implReviseDone(updated.id, updated.revisions));
+    return 0;
   }
 }
 

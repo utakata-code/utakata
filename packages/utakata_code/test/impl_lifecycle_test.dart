@@ -491,6 +491,148 @@ created: "2026-07-01"
     });
   });
 
+  group('凍結・改訂・置き換え(v1.8.0, #22)', () {
+    File planFile(ImplLane lane, String name) =>
+        File('${dir.path}/doc/impl/${lane.dirName}/$name');
+
+    /// 計画部分(マーカーより上)だけを書き換える
+    void editPlan(File file, String Function(String plan) edit) {
+      final content = file.readAsStringSync();
+      final split = content.indexOf('\n---\n') + 5;
+      final head = content.substring(0, split);
+      final parts = ImplPlanBody.split(content.substring(split));
+      final log = parts.log == null
+          ? ''
+          : '${ImplPlanBody.marker}\n${parts.log}';
+      file.writeAsStringSync('$head${edit(parts.plan)}$log');
+    }
+
+    Future<String> frozenPlan() async {
+      final id = await usecase.create(dir.path,
+          feature: 'login',
+          now: now,
+          bodyTemplate: '# 計画\n\n方針 A。\n\n${ImplPlanBody.marker}\n'
+              '${ImplPlanBody.logHeading}\n\n');
+      await usecase.setStatus(dir.path, id, ImplPlanStatus.inProgress, now: now);
+      return id;
+    }
+
+    test('todo の間は凍結されず、start で指紋が記録される', () async {
+      final id = await newPlan('login');
+      expect((await usecase.find(dir.path, id))!.isFrozen, isFalse);
+
+      await usecase.setStatus(dir.path, id, ImplPlanStatus.inProgress, now: now);
+      final frozen = (await usecase.find(dir.path, id))!;
+      expect(frozen.isFrozen, isTrue);
+      expect(frozen.planDigest, hasLength(16));
+    });
+
+    test('digest は改行コード・行末空白・末尾空行の違いを無視する', () {
+      expect(ImplPlanBody.digest('a\nb\n'), ImplPlanBody.digest('a  \r\nb\r\n\n\n'));
+      expect(ImplPlanBody.digest('a\nb\n'), isNot(ImplPlanBody.digest('a\nc\n')));
+    });
+
+    test('凍結後に計画部分を書き換えると遷移が止まる(archive は除く)', () async {
+      final id = await frozenPlan();
+      editPlan(planFile(ImplLane.inProgress, '${id}_login.md'),
+          (plan) => plan.replaceFirst('方針 A', '方針 B'));
+
+      await expectLater(
+          usecase.setStatus(dir.path, id, ImplPlanStatus.review, now: now),
+          throwsA(isA<ImplPlanFrozenException>()));
+      await expectLater(
+          usecase.setTest(dir.path, id, ImplTestStatus.notRequired,
+              skipReason: 'x', now: now),
+          throwsA(isA<ImplPlanFrozenException>()));
+      expect(await usecase.listDrifted(dir.path), [id]);
+
+      // 離れる操作は止めない
+      await usecase.archive(dir.path, id, now: now);
+      expect(existsIn(ImplLane.archive, '${id}_login.md'), isTrue);
+    });
+
+    test('記録領域への追記は凍結に抵触しない', () async {
+      final id = await frozenPlan();
+      await usecase.note(dir.path, id, '進捗', now: now, actor: 'me');
+      await usecase.setStatus(dir.path, id, ImplPlanStatus.review, now: now);
+      expect(existsIn(ImplLane.review, '${id}_login.md'), isTrue);
+      expect(await usecase.listDrifted(dir.path), isEmpty);
+    });
+
+    test('revise は指紋を更新し revisions を +1 して理由を記録する', () async {
+      final id = await frozenPlan();
+      editPlan(planFile(ImplLane.inProgress, '${id}_login.md'),
+          (plan) => plan.replaceFirst('方針 A', '方針 B'));
+
+      final revised = await usecase.revise(dir.path, id,
+          reason: 'A は性能要件を満たさない',
+          now: DateTime(2026, 8, 12, 9, 0),
+          actor: 'me');
+      expect(revised.revisions, 1);
+      expect(await usecase.listDrifted(dir.path), isEmpty);
+
+      final body = planFile(ImplLane.inProgress, '${id}_login.md')
+          .readAsStringSync();
+      expect(body, contains('revisions: 1'));
+      expect(body,
+          contains('- 2026-08-12 09:00 (me) revised (#1): A は性能要件を満たさない'));
+
+      // 受理後は先へ進める
+      await usecase.setStatus(dir.path, id, ImplPlanStatus.review, now: now);
+      expect(existsIn(ImplLane.review, '${id}_login.md'), isTrue);
+    });
+
+    test('revise は変更が無ければ拒否、todo の計画にも拒否、理由は必須', () async {
+      final id = await frozenPlan();
+      expect(() => usecase.revise(dir.path, id, reason: 'x', now: now),
+          throwsArgumentError, reason: '変更が無い');
+      expect(() => usecase.revise(dir.path, id, reason: ' ', now: now),
+          throwsArgumentError, reason: '理由が空');
+
+      final fresh = await newPlan('payment');
+      expect(() => usecase.revise(dir.path, fresh, reason: 'x', now: now),
+          throwsArgumentError, reason: 'todo はまだ凍結されていない');
+    });
+
+    test('1.7.x のファイル(指紋もマーカーも無い)は最初の遷移で凍結され、'
+        '追記で領域が作られても抵触しない', () async {
+      final file = File('${dir.path}/doc/impl/1_todo/PLAN-0003_legacy.md')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('---\nid: "PLAN-0003"\nfeature: "legacy"\n'
+            'status: "todo"\ncreated: "2026-07-01"\n---\n# 旧計画\n本文\n');
+
+      await usecase.setStatus(dir.path, 'PLAN-0003', ImplPlanStatus.inProgress,
+          now: now);
+      expect((await usecase.find(dir.path, 'PLAN-0003'))!.isFrozen, isTrue);
+      expect(await usecase.listDrifted(dir.path), isEmpty,
+          reason: 'マーカー追加で本文は伸びたが計画部分は同じ');
+      expect(file.existsSync(), isFalse, reason: '2_in_progress へ移動している');
+
+      await usecase.setStatus(dir.path, 'PLAN-0003', ImplPlanStatus.done,
+          now: now);
+      expect(existsIn(ImplLane.testTodo, 'PLAN-0003_legacy.md'), isTrue);
+    });
+
+    test('supersedes は存在する計画だけ受け付け、frontmatter に残る', () async {
+      final old = await frozenPlan();
+      final next = await usecase.create(dir.path,
+          feature: 'login',
+          supersedes: old,
+          now: now,
+          bodyTemplate: '# 計画 v2\n');
+      expect((await usecase.find(dir.path, next))!.supersedes, old);
+      expect(
+          File('${dir.path}/doc/impl/1_todo/${next}_login.md')
+              .readAsStringSync(),
+          contains('supersedes: "$old"'));
+
+      expect(
+          () => usecase.create(dir.path,
+              feature: 'x', supersedes: 'PLAN-9999', now: now, bodyTemplate: ''),
+          throwsArgumentError);
+    });
+  });
+
   group('ImplPlanGate', () {
     test('archived 以外の計画があれば「計画あり」', () {
       final plans = [

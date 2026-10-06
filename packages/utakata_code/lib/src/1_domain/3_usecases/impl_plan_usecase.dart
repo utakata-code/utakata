@@ -27,12 +27,17 @@ class ImplPlanUsecase {
     List<String> specs = const [],
     List<String> messages = const [],
     ImplPlanBasis? basis,
+    String? supersedes,
     required DateTime now,
     required String bodyTemplate,
   }) async {
     if (!_featurePattern.hasMatch(feature) || feature.contains('..')) {
       throw ArgumentError('invalid feature name: "$feature" '
           '(use letters, digits, ".", "_", "-")');
+    }
+    if (supersedes != null && await _repo.findById(projectDir, supersedes) == null) {
+      // 存在しない ID を繋いでも辿れない。タイポをここで止める
+      throw ArgumentError('superseded plan "$supersedes" not found');
     }
     final id = await _repo.nextId(projectDir);
     final meta = ImplPlanMeta(
@@ -45,9 +50,87 @@ class ImplPlanUsecase {
       created: now,
       origin: ImplPlanOrigin(agreements: agreements, specs: specs, messages: messages),
       basis: basis,
+      supersedes: supersedes,
     );
     await _repo.create(projectDir, meta, bodyTemplate);
     return id;
+  }
+
+  /// 現在の本文から計画部分の指紋を計算する。
+  Future<String> _currentDigest(String projectDir, String id) async =>
+      ImplPlanBody.digest(ImplPlanBody.split(await _repo.readBody(projectDir, id)).plan);
+
+  /// 凍結後に計画部分が書き換えられていれば例外(v1.8.0, #22)。
+  ///
+  /// 「書き換えるな」をシステムプロンプトで頼むだけでなく CLI で止める。
+  /// 止めるのは**状態遷移**であって編集そのものではない — 誤字 1 つ直す
+  /// のに新しい計画書が要る運用にはしない。意図した変更は `impl revise`
+  /// で受理すれば先へ進める。
+  Future<void> _refuseIfDrifted(String projectDir, ImplPlanMeta meta) async {
+    if (!meta.isFrozen) return;
+    final current = await _currentDigest(projectDir, meta.id);
+    if (current != meta.planDigest) {
+      throw ImplPlanFrozenException(meta.id);
+    }
+  }
+
+  /// `todo` を離れる最初の遷移で計画部分を凍結する(指紋を記録する)。
+  Future<ImplPlanMeta> _freezeIfLeavingTodo(
+      String projectDir, ImplPlanMeta meta, ImplPlanStatus next) async {
+    if (meta.isFrozen || next == ImplPlanStatus.todo) return meta;
+    return meta.copyWith(planDigest: await _currentDigest(projectDir, meta.id));
+  }
+
+  /// 凍結後の書き換えを改訂として受理する(v1.8.0, #22)。
+  ///
+  /// 指紋を現在の本文に合わせ直し、`revisions` を +1 して、理由を記録領域に
+  /// 残す。「何度も計画が変わった feature」がボードから見えるようにするため。
+  Future<ImplPlanMeta> revise(
+    String projectDir,
+    String id, {
+    required String reason,
+    required DateTime now,
+    String actor = '',
+  }) async {
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('a reason is required to revise a frozen plan');
+    }
+    final meta = await _require(projectDir, id);
+    if (!meta.isFrozen) {
+      throw ArgumentError('plan "$id" is not frozen yet (status: '
+          '${ImplPlanMeta.statusToString(meta.status)}); edit it freely');
+    }
+    final current = await _currentDigest(projectDir, id);
+    if (current == meta.planDigest) {
+      throw ArgumentError('plan "$id" has no changes in its plan section');
+    }
+    final updated = meta.copyWith(
+      planDigest: current,
+      revisions: meta.revisions + 1,
+    );
+    await _repo.update(
+      projectDir,
+      updated,
+      logEntry: ImplPlanBody.formatEntry(
+        at: now,
+        actor: actor,
+        text: 'revised (#${updated.revisions}): ${reason.trim()}',
+      ),
+    );
+    return updated;
+  }
+
+  /// 凍結後に計画部分が書き換えられたまま受理されていない計画の ID
+  /// (`utakata doctor` 用)。
+  Future<List<String>> listDrifted(String projectDir) async {
+    final drifted = <String>[];
+    for (final meta in await _repo.listAll(projectDir)) {
+      if (!meta.isFrozen) continue;
+      if (await _currentDigest(projectDir, meta.id) != meta.planDigest) {
+        drifted.add(meta.id);
+      }
+    }
+    return drifted;
   }
 
   Future<List<ImplPlanMeta>> list(String projectDir) => _repo.listAll(projectDir);
@@ -66,7 +149,12 @@ class ImplPlanUsecase {
     required DateTime now,
     String actor = '',
   }) async {
-    final meta = await _require(projectDir, id);
+    var meta = await _require(projectDir, id);
+    // archive は「離れる」操作なので、書き換えられていても止めない
+    if (status != ImplPlanStatus.archived) {
+      await _refuseIfDrifted(projectDir, meta);
+    }
+    meta = await _freezeIfLeavingTodo(projectDir, meta, status);
     final done = status == ImplPlanStatus.done;
     final updated = meta.copyWith(
       status: status,
@@ -97,6 +185,7 @@ class ImplPlanUsecase {
     String actor = '',
   }) async {
     final meta = await _require(projectDir, id);
+    await _refuseIfDrifted(projectDir, meta);
     final advancing =
         test != ImplTestStatus.todo && test != ImplTestStatus.notRequired;
     if (advancing && meta.status != ImplPlanStatus.done) {
@@ -181,6 +270,24 @@ class ImplPlanUsecase {
     }
     return meta;
   }
+}
+
+/// 凍結後に計画部分が書き換えられたまま遷移しようとした(v1.8.0, #22)。
+///
+/// `Exception` にしてあるのは、BaseCommand がスタックトレース無しで
+/// メッセージだけを表示するため(`StateError` だと落ちて見える)。
+final class ImplPlanFrozenException implements Exception {
+  final String id;
+
+  const ImplPlanFrozenException(this.id);
+
+  @override
+  String toString() =>
+      'plan "$id" was edited after it was frozen (impl start). '
+      'If the change is intended, accept it with '
+      '`utakata impl revise $id --reason "..."`; otherwise restore the '
+      'plan section. Progress notes go below the `<!-- utakata:log -->` '
+      'marker via `utakata impl note`.';
 }
 
 /// 状態遷移の結果(表示用)。

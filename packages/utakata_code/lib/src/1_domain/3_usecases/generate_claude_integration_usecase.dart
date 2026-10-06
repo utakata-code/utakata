@@ -363,15 +363,15 @@ ${_skillRecordsSection(config)}
 ---
 name: utakata-impl-flow
 description: |
-  feature 単位の実装計画(impl plan)のライフサイクル管理。
-  feature の実装を開始する・実装方針を検討する・実装を完了する・
-  テストを進める・「どの feature が進行中？」のときに使用。
+  実装計画(impl plan)のライフサイクル管理。feature の実装を開始する・
+  実装方針を検討する・進捗を記録する・実装を完了する・テストを進める・
+  リファクタリングや文書整理の計画を立てる・「どの計画が進行中？」のときに使用。
 ---
 
 # utakata 実装計画フロー
 
-規模のある feature は、コードを書く前に feature ごとの実装計画を作る
-(`utakata.yaml` の `enforcement.impl_plan: "on"` で必須化できる)。
+規模のある変更は、コードを書く前に実装計画を作る
+(`utakata.yaml` の `enforcement.impl_plan: "on"` で feature の計画を必須化できる)。
 
 ## 状態は2軸
 
@@ -383,29 +383,52 @@ description: |
 `5_test_in_progress` / `6_test_review` / `7_done` / `archive`)。
 **正は frontmatter** であり、配置はそこから導出される。
 
+## 計画書は「計画」と「実施記録」の2領域
+
+本文はマーカー行 `<!-- utakata:log -->` で分かれている。
+
+- **上 = 計画**。`utakata impl start` した時点で**凍結**される。
+  以後、書き換えると状態遷移が止まる
+- **下 = 実施記録**。追記のみ。**ファイルを直接編集せず**
+  `utakata impl note <PLAN-id> "本文"` で追記する(日時と記録者が付く)
+
+実装中の技術選定の理由・試行錯誤・途中の判断・追試の結果は、すべて
+**記録として `impl note` で残す**。計画部分には書かない。
+
 ## 手順
 
-1. **着手前**: `utakata impl new <feature> [--agreement <AGR-id>] [--spec <path>]`
-   — `doc/impl/1_todo/PLAN-NNNN_<feature>.md` が発行される
-2. **実装開始**: `utakata impl start <PLAN-id>`
-3. **実装中**: 技術選定の理由・試行錯誤・途中の判断は**その feature の PLAN
-   ファイルの本文に書く**(他の feature の文脈と混ぜない = コンテキスト分離)。
-   frontmatter(機械管理部分)は手で編集しない
-4. **自分のレビュー**: `utakata impl review <PLAN-id>`
-5. **実装完了**: `utakata impl done <PLAN-id>`
-6. **検証**: `utakata impl test start|review|done <PLAN-id>`
+1. **着手前**: `utakata impl new [kind:]<target> [--agreement <AGR-id>] [--spec <path>]`
+   — `kind` は `feat` / `fix` / `refactor` / `docs` / `chore` / `test`。
+   省略時は `feat`(feature の計画。`doc/impl/1_todo/PLAN-NNNN_<feature>.md`)。
+   feature に紐づかない作業は `refactor:doc_layout` のように種別を付ける
+   (`PLAN-NNNN_refactor_doc_layout.md`)
+2. **計画を書く**: `todo` の間は計画部分を自由に編集してよい
+3. **実装開始**: `utakata impl start <PLAN-id>` — ここで計画部分が凍結される
+4. **実装中**: `utakata impl note <PLAN-id> "..."` で記録を追記する
+5. **自分のレビュー**: `utakata impl review <PLAN-id>`
+6. **実装完了**: `utakata impl done <PLAN-id>`
+7. **検証**: `utakata impl test start|review|done <PLAN-id>`
    — テストが不要な変更なら `utakata impl test skip <PLAN-id> --reason "..."`
-7. **アーカイブ**: 参照しなくなったら `utakata impl archive <PLAN-id>`
-8. **状況確認**: `utakata impl list` / `utakata impl board`
+8. **アーカイブ**: 参照しなくなったら `utakata impl archive <PLAN-id>`
+9. **状況確認**: `utakata impl list` / `utakata impl board`
+
+## 凍結後に計画を変えたくなったら
+
+- **小さな修正(誤字・補足)**: 計画部分を直したうえで
+  `utakata impl revise <PLAN-id> --reason "理由"` で改訂として受理する。
+  `revisions` が +1 され、理由が記録に残る。受理するまで状態遷移は止まる
+- **設計方針やスコープが変わる**: 凍結した計画書に上書きせず、
+  `utakata impl new <target> --supersedes <旧PLAN-id>` で新しい計画書を切る。
+  旧計画は `utakata impl archive` する(ボードに「置き換え」が表示される)
 
 ## 注意
 
 - **逆行してよい**。テストが落ちたら `utakata impl start` で実装へ戻す
   (検証軸は実装が `done` になるまで進められない)
-- frontmatter を手で書き換えてしまった / ファイルを手で動かした場合は
-  `utakata impl sync` で配置を是正する
-- `doc/impl/` は AI も編集できる(deny 対象は `doc/records/**` と `doc/preview/**`)。
-  ただし本文の追記に留め、既存の記述を書き換えない
+- frontmatter(`id` / `status` / `plan_digest` 等)は機械管理。手で編集しない。
+  書き換えてしまった / ファイルを手で動かした場合は `utakata impl sync`
+- 「凍結後に書き換えられています」と出たら、意図した変更なら `revise`、
+  そうでなければ計画部分を元に戻す。記録は `impl note` へ
 - ボード(`doc/preview/impl_board.md`)は状態変更のたびに自動再生成される
 - 実装が仕様やお客様の合意に関わる場合は、着手前に utakata-client-context
   スキルの手順で根拠を確認する

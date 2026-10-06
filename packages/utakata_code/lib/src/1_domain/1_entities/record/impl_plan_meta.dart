@@ -114,6 +114,18 @@ final class ImplPlanMeta {
 
   final DateTime? completedOn;
 
+  /// 計画部分の指紋(v1.8.0)。`impl start` で凍結した時点の値。
+  /// null = まだ凍結されていない(todo のまま、または 1.7.x 以前のファイル)。
+  /// 現在の本文から計算した値と食い違えば「凍結後に書き換えられた」。
+  final String? planDigest;
+
+  /// 凍結後に計画を改訂した回数(`impl revise` で +1)。
+  final int revisions;
+
+  /// この計画が置き換える旧計画の ID。計画そのものが変わるときは凍結した
+  /// 計画書に上書きするのではなく、新しい計画書を切ってここで繋ぐ。
+  final String? supersedes;
+
   const ImplPlanMeta({
     required this.id,
     required this.feature,
@@ -128,7 +140,13 @@ final class ImplPlanMeta {
     this.onDeviceVerified = false,
     this.testSkipReason,
     this.completedOn,
+    this.planDigest,
+    this.revisions = 0,
+    this.supersedes,
   });
+
+  /// 計画部分が凍結済みか(`todo` を離れた時点で凍結される)。
+  bool get isFrozen => planDigest != null;
 
   /// 実装・検証ともに完了しているか(レーン導出と `list` の表示に使う)。
   bool get isComplete =>
@@ -159,6 +177,8 @@ final class ImplPlanMeta {
     bool? onDeviceVerified,
     String? testSkipReason,
     DateTime? completedOn,
+    String? planDigest,
+    int? revisions,
     bool clearCompletedOn = false,
     bool clearVerified = false,
     bool clearSkipReason = false,
@@ -173,6 +193,9 @@ final class ImplPlanMeta {
         created: created,
         origin: origin,
         basis: basis,
+        planDigest: planDigest ?? this.planDigest,
+        revisions: revisions ?? this.revisions,
+        supersedes: supersedes,
         staticVerified:
             clearVerified ? false : (staticVerified ?? this.staticVerified),
         onDeviceVerified:
