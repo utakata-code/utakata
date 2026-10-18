@@ -467,7 +467,9 @@ class EnMessages implements CliMessages {
   @override
   String get cmdImplDesc => 'Feature implementation plan management';
   @override
-  String get cmdImplNewDesc => 'Create a new implementation plan';
+  String get cmdImplNewDesc =>
+      'Create a new implementation plan ([kind:]<target>; kind is '
+      'feat|fix|refactor|docs|chore|test, default feat)';
   @override
   String get cmdImplListDesc => 'List implementation plans';
   @override
@@ -475,7 +477,7 @@ class EnMessages implements CliMessages {
   @override
   String get cmdImplArchiveDesc => 'Move a done implementation plan to archive/';
   @override
-  String implNewDone(String id, String path) => '✅ Created $id: $path';
+  String implNewDone(String id, String path) => 'Created $id: $path';
   @override
   String get implListEmpty => 'No implementation plans found';
   @override
@@ -524,7 +526,8 @@ class EnMessages implements CliMessages {
   String get optImplSkipReason => 'Why testing is unnecessary';
   @override
   String get implFeatureRequired =>
-      'Specify a feature name: utakata impl new <feature>';
+      'Specify a target: utakata impl new [kind:]<target> '
+      '(e.g. login / refactor:doc_layout)';
   @override
   String get implIdRequired =>
       'Specify a plan ID (see utakata impl list)';
@@ -569,6 +572,36 @@ class EnMessages implements CliMessages {
   String implPlansMisplaced(int count, String samples) =>
       '$count implementation plan(s) sit in a lane their frontmatter does not '
       'imply ($samples). Run `utakata impl sync` to fix.';
+
+  // ─── impl plan/log split and freezing (v1.8.0) ───
+  @override
+  String get cmdImplNoteDesc =>
+      'Append one progress note (text from arguments or stdin; the plan '
+      'section is left untouched)';
+  @override
+  String get cmdImplReviseDesc =>
+      'Accept edits made to a frozen plan as a revision (revisions + 1)';
+  @override
+  String get optImplReviseReason => 'Why the plan changed (required)';
+  @override
+  String get optImplSupersedes =>
+      'ID of the older plan this one replaces (e.g. PLAN-0001)';
+  @override
+  String get implNoteTextRequired =>
+      'Specify the note text: utakata impl note <ID> "text" (or via stdin)';
+  @override
+  String implNoteDone(String id) => 'Appended a note to $id';
+  @override
+  String get implReviseReasonRequired =>
+      'Specify --reason (it is written into the plan\'s log)';
+  @override
+  String implReviseDone(String id, int revisions) =>
+      'Accepted the changes to $id as revision $revisions';
+  @override
+  String implPlansDrifted(int count, String samples) =>
+      '$count implementation plan(s) were edited after being frozen '
+      '($samples). If intended, accept with '
+      '`utakata impl revise <ID> --reason "..."`.';
   @override
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md is from an older version '

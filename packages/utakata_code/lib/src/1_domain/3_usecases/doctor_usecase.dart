@@ -35,6 +35,9 @@ class DoctorUsecase {
       String projectDir)? _detectMisplacedPlans;
   final Future<Set<String>?> Function(String projectDir)? _featuresWithImplPlan;
   final Future<ImplScanResult> Function(String projectDir)? _scanImplPlans;
+
+  /// 凍結後に計画部分が書き換えられたまま受理されていない計画(v1.8.0)。
+  final Future<List<String>> Function(String projectDir)? _driftedImplPlans;
   final CliMessages? _msg;
 
   const DoctorUsecase({
@@ -53,6 +56,7 @@ class DoctorUsecase {
         detectMisplacedPlans,
     Future<Set<String>?> Function(String projectDir)? featuresWithImplPlan,
     Future<ImplScanResult> Function(String projectDir)? scanImplPlans,
+    Future<List<String>> Function(String projectDir)? driftedImplPlans,
     CliMessages? msg,
   })  : _planRepo = planRepo,
         _configRepo = configRepo,
@@ -67,6 +71,7 @@ class DoctorUsecase {
         _detectMisplacedPlans = detectMisplacedPlans,
         _featuresWithImplPlan = featuresWithImplPlan,
         _scanImplPlans = scanImplPlans,
+        _driftedImplPlans = driftedImplPlans,
         _msg = msg;
 
   /// 診断のみ行う(環境チェック + utakata.yaml スキーマ検証)。
@@ -151,6 +156,16 @@ class DoctorUsecase {
       }
     }
 
+    // 凍結後の書き換えは遷移時に止まるが、遷移しないまま放置されると
+    // 誰も気づかないので、ここで報告する
+    final drifted = _driftedImplPlans;
+    if (drifted != null && msg != null) {
+      final ids = await drifted(projectDir);
+      if (ids.isNotEmpty) {
+        issues.add(msg.implPlansDrifted(ids.length, _sample(ids)));
+      }
+    }
+
     final withPlan = _featuresWithImplPlan;
     if (withPlan == null || msg == null) return issues;
     final plan = await _planRepo.read(projectDir);
@@ -188,8 +203,11 @@ class DoctorUsecase {
     if (!_fileExists(path)) return const [];
     final content = await _readFile(path);
     if (content == null) return const [];
-    // v1.7.0 のスキルは必ずレーンと start コマンドに触れている
-    if (content.contains('impl start') && content.contains('レーン')) {
+    // v1.7.0 のスキルは必ずレーンと start コマンドに触れている。
+    // v1.8.0 のスキルはさらに note(記録の追記)に触れている。
+    if (content.contains('impl start') &&
+        content.contains('レーン') &&
+        content.contains('impl note')) {
       return const [];
     }
     final msg = _msg;

@@ -294,7 +294,10 @@ Future<void> main(List<String> arguments) async {
     writeFile: fs.writeFile,
   );
 
+  final implPlanUsecase = ImplPlanUsecase(repo: implPlanRepo);
+
   final doctorUsecase = DoctorUsecase(
+    driftedImplPlans: implPlanUsecase.listDrifted,
     detectMisplacedPlans: implPlanRepo.detectMisplaced,
     featuresWithImplPlan: featuresWithImplPlan,
     scanImplPlans: implPlanRepo.scanAll,
@@ -313,8 +316,6 @@ Future<void> main(List<String> arguments) async {
 
   final recordAgreementUsecase = RecordAgreementUsecase(repo: agreementRepo);
   final listAgreementsUsecase = ListAgreementsUsecase(repo: agreementRepo);
-
-  final implPlanUsecase = ImplPlanUsecase(repo: implPlanRepo);
 
   final renderSummaryUsecase = RenderSummaryUsecase(
     agreementRepo: agreementRepo,

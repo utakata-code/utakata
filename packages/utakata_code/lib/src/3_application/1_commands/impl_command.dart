@@ -6,6 +6,7 @@ import 'package:args/command_runner.dart';
 import '../../1_domain/1_entities/record/impl_plan_meta.dart';
 import '../../1_domain/3_usecases/impl_plan_usecase.dart';
 import '../../1_domain/messages/cli_messages.dart';
+import '../../1_domain/services/actor_resolver.dart';
 import '../../1_domain/services/case_converter.dart';
 import '../../1_domain/services/impl_lane.dart';
 import '../3_presenters/impl_board_presenter.dart';
@@ -35,6 +36,8 @@ class ImplCommand extends Command<int> {
     addSubcommand(_ImplTestCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplArchiveCommand(usecase, _msg, writeFile));
     addSubcommand(_ImplSyncCommand(usecase, _msg, writeFile));
+    addSubcommand(_ImplNoteCommand(usecase, _msg));
+    addSubcommand(_ImplReviseCommand(usecase, _msg, writeFile));
   }
 
   @override
@@ -75,7 +78,14 @@ const _bodyTemplate = '''
 ## 7. 文書更新
 
 ## 8. スコープ外
+
+<!-- utakata:log -->
+## 実施記録
+
 ''';
+
+/// 記録者(`UTAKATA_ACTOR` → `USER`)。records と同じ解決順。
+String _actor() => ActorResolver.resolve(Platform.environment);
 
 /// 状態を変えたら常にボードを作り直す(プレビューを手で再生成させない)。
 Future<void> _refreshBoard(
@@ -117,7 +127,8 @@ class _ImplNewCommand extends BaseCommand {
       ..addOption('agreement') // カンマ区切り
       ..addOption('spec')
       ..addOption('message')
-      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment']);
+      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment'])
+      ..addOption('supersedes', help: _msg.optImplSupersedes);
   }
 
   @override
@@ -126,15 +137,18 @@ class _ImplNewCommand extends BaseCommand {
       Logger.error(_msg.implFeatureRequired);
       return 64;
     }
+    // v1.8.0: `[kind:]target`。種別が無ければ feat(1.7.x と同じ)。
+    final spec = ImplPlanKind.parseSpec(argResults!.rest.first);
     // feature add / plan.yaml と同じ正規化を通す(ゲート判定が名前の
     // 表記ゆれで食い違わないように)
-    final feature = CaseConverter.toSnakeCase(argResults!.rest.first);
+    final feature = CaseConverter.toSnakeCase(spec.target);
     final basisRaw = argResults!['basis'] as String?;
     final projectDir = Directory.current.path;
 
     final id = await _usecase.create(
       projectDir,
       feature: feature,
+      kind: spec.kind,
       backlog: argResults!['backlog'] as String,
       agreements: _splitCsv(argResults!['agreement'] as String?),
       specs: _splitCsv(argResults!['spec'] as String?),
@@ -144,13 +158,15 @@ class _ImplNewCommand extends BaseCommand {
           : basisRaw == 'developer_judgment'
               ? ImplPlanBasis.developerJudgment
               : null,
+      supersedes: argResults!['supersedes'] as String?,
       now: DateTime.now(),
       bodyTemplate: _bodyTemplate,
     );
 
     await _refreshBoard(_usecase, projectDir, _writeFile);
+    final created = (await _usecase.find(projectDir, id))!;
     Logger.success(_msg.implNewDone(
-        id, 'doc/impl/${ImplLane.todo.dirName}/${id}_$feature.md'));
+        id, 'doc/impl/${ImplLane.todo.dirName}/${created.fileName}'));
     return 0;
   }
 
@@ -206,6 +222,7 @@ class _ImplListCommand extends BaseCommand {
           {
             'id': plan.id,
             'feature': plan.feature,
+            'kind': plan.kind.name,
             'status': ImplPlanMeta.statusToString(plan.status),
             'test': ImplPlanMeta.testToString(plan.test),
             'lane': ImplLane.ofMeta(plan).dirName,
@@ -214,6 +231,9 @@ class _ImplListCommand extends BaseCommand {
               'completed_on': plan.completedOn!.toIso8601String().substring(0, 10),
             if (plan.origin.agreements.isNotEmpty)
               'agreements': plan.origin.agreements,
+            'frozen': plan.isFrozen,
+            if (plan.revisions > 0) 'revisions': plan.revisions,
+            if (plan.supersedes != null) 'supersedes': plan.supersedes,
           },
       ]));
       return 0;
@@ -277,7 +297,7 @@ abstract class _StatusTransitionCommand extends BaseCommand {
     final projectDir = Directory.current.path;
     final result = await usecase.setStatus(
         projectDir, argResults!.rest.first, target,
-        now: DateTime.now());
+        now: DateTime.now(), actor: _actor());
     await _refreshBoard(usecase, projectDir, writeFile);
     _reportTransition(result, msg);
     return 0;
@@ -410,9 +430,86 @@ class _TestTransitionCommand extends BaseCommand {
       skipReason: _target == ImplTestStatus.notRequired
           ? argResults!['reason'] as String?
           : null,
+      now: DateTime.now(),
+      actor: _actor(),
     );
     await _refreshBoard(_usecase, projectDir, _writeFile);
     _reportTransition(result, _msg);
+    return 0;
+  }
+}
+
+/// `utakata impl note <ID> [text]` — 実施記録を 1 件追記(本文は引数か stdin)
+class _ImplNoteCommand extends BaseCommand {
+  final ImplPlanUsecase _usecase;
+  final CliMessages _msg;
+
+  @override
+  String get name => 'note';
+  @override
+  String get description => _msg.cmdImplNoteDesc;
+
+  _ImplNoteCommand(this._usecase, this._msg);
+
+  @override
+  Future<int> execute() async {
+    final rest = argResults!.rest;
+    if (rest.isEmpty) {
+      Logger.error(_msg.implIdRequired);
+      return 64;
+    }
+    final text = rest.length > 1
+        ? rest.skip(1).join(' ')
+        : await _readStdin();
+    if (text.trim().isEmpty) {
+      Logger.error(_msg.implNoteTextRequired);
+      return 64;
+    }
+    await _usecase.note(Directory.current.path, rest.first, text,
+        now: DateTime.now(), actor: _actor());
+    Logger.success(_msg.implNoteDone(rest.first));
+    return 0;
+  }
+
+  /// 端末に繋がっている(= パイプされていない)stdin は読まない。
+  /// 読みにいくと入力待ちで止まって見える。
+  Future<String> _readStdin() async {
+    if (stdin.hasTerminal) return '';
+    return utf8.decoder.bind(stdin).join();
+  }
+}
+
+/// `utakata impl revise <ID> --reason "..."` — 凍結後の書き換えを改訂として受理
+class _ImplReviseCommand extends BaseCommand {
+  final ImplPlanUsecase _usecase;
+  final CliMessages _msg;
+  final Future<void> Function(String path, String content) _writeFile;
+
+  @override
+  String get name => 'revise';
+  @override
+  String get description => _msg.cmdImplReviseDesc;
+
+  _ImplReviseCommand(this._usecase, this._msg, this._writeFile) {
+    argParser.addOption('reason', help: _msg.optImplReviseReason);
+  }
+
+  @override
+  Future<int> execute() async {
+    if (argResults!.rest.isEmpty) {
+      Logger.error(_msg.implIdRequired);
+      return 64;
+    }
+    final reason = argResults!['reason'] as String?;
+    if (reason == null || reason.trim().isEmpty) {
+      Logger.error(_msg.implReviseReasonRequired);
+      return 64;
+    }
+    final projectDir = Directory.current.path;
+    final updated = await _usecase.revise(projectDir, argResults!.rest.first,
+        reason: reason, now: DateTime.now(), actor: _actor());
+    await _refreshBoard(_usecase, projectDir, _writeFile);
+    Logger.success(_msg.implReviseDone(updated.id, updated.revisions));
     return 0;
   }
 }

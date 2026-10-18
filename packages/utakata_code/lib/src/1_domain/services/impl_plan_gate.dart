@@ -9,9 +9,14 @@ import '../1_entities/record/impl_plan_meta.dart';
 abstract final class ImplPlanGate {
   /// [plans] に、archived でない計画が1つでもあれば「計画あり」とみなす。
   /// `done` でも満たす — 細かすぎる要求は運用を殺すため。
+  ///
+  /// v1.8.0: feature を対象にする種別(`feat` / `fix`)だけを数える。
+  /// `refactor:login` のような計画は login feature の「実装計画」ではないので、
+  /// それだけでゲートを通してしまわない。
   static Set<String> featuresWithPlan(Iterable<ImplPlanMeta> plans) => {
         for (final plan in plans)
-          if (plan.status != ImplPlanStatus.archived) plan.feature,
+          if (plan.status != ImplPlanStatus.archived && plan.kind.targetsFeature)
+            plan.feature,
       };
 
   /// 計画が無いために止めるべき feature 名(順序は [featureNames] のまま)。

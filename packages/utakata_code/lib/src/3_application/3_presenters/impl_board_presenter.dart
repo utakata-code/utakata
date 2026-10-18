@@ -16,8 +16,12 @@ abstract final class ImplBoardPresenter {
 
   static String render(List<ImplPlanMeta> plans) {
     final byLane = <ImplLane, List<ImplPlanMeta>>{};
+    // 旧計画 ID → それを置き換えた新計画 ID(逆引き。旧計画側にも表示する)
+    final supersededBy = <String, String>{};
     for (final plan in plans) {
       byLane.putIfAbsent(ImplLane.ofMeta(plan), () => []).add(plan);
+      final old = plan.supersedes;
+      if (old != null) supersededBy[old] = plan.id;
     }
 
     final active =
@@ -51,8 +55,12 @@ abstract final class ImplBoardPresenter {
             'テスト不要${plan.testSkipReason != null ? '(${plan.testSkipReason})' : ''}',
           if (plan.origin.agreements.isNotEmpty)
             '根拠: ${plan.origin.agreements.join(", ")}',
+          if (plan.revisions > 0) '改訂 ${plan.revisions} 回',
+          if (plan.supersedes != null) '${plan.supersedes} を置き換え',
+          if (supersededBy.containsKey(plan.id))
+            '→ ${supersededBy[plan.id]} に置き換え済み',
         ];
-        buffer.writeln('- **${plan.id}** ${plan.feature}'
+        buffer.writeln('- **${plan.id}** ${plan.displayName}'
             '${notes.isEmpty ? '' : ' — ${notes.join(" / ")}'}');
       }
       buffer.writeln();
@@ -64,5 +72,5 @@ abstract final class ImplBoardPresenter {
   /// 端末表示用(1行1計画)。
   static String renderLine(ImplPlanMeta plan) =>
       '${plan.id}  [${ImplPlanMeta.statusToString(plan.status)}'
-      ' / test:${ImplPlanMeta.testToString(plan.test)}]  ${plan.feature}';
+      ' / test:${ImplPlanMeta.testToString(plan.test)}]  ${plan.displayName}';
 }

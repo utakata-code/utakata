@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import '../../1_domain/1_entities/record/impl_plan_meta.dart';
 import '../../1_domain/2_repositories/impl_plan_repository.dart';
 import '../../1_domain/services/impl_lane.dart';
+import '../../1_domain/services/impl_plan_body.dart';
 import '../1_models/impl_plan_front_matter_model.dart';
 import '../2_data_sources/1_local/filesystem_data_source.dart';
 import '../2_data_sources/1_local/front_matter_data_source.dart';
@@ -22,8 +23,6 @@ class ImplPlanRepositoryImpl implements ImplPlanRepository {
   // p.join を通す(リテラルの 'doc/impl' を join に渡すと Windows で
   // 区切り文字が混在し、期待パスと実パスの比較が常に不一致になる)。
   static String get _implDir => p.join('doc', 'impl');
-
-  String _fileName(String id, String feature) => '${id}_$feature.md';
 
   /// `doc/impl/` 配下の全 .md を走査する。
   ///
@@ -69,7 +68,7 @@ class ImplPlanRepositoryImpl implements ImplPlanRepository {
   String _expectedRelativePath(ImplPlanMeta meta) => p.join(
         _implDir,
         ImplLane.ofMeta(meta).dirName,
-        _fileName(meta.id, meta.feature),
+        meta.fileName,
       );
 
   @override
@@ -127,33 +126,51 @@ class ImplPlanRepositoryImpl implements ImplPlanRepository {
     return null;
   }
 
-  @override
-  Future<String?> update(String projectDir, ImplPlanMeta meta) async {
+  /// [id] の計画ファイルをただ 1 つに特定する(相対パス)。
+  Future<String> _locate(String projectDir, String id) async {
     final scan = await _scan(projectDir);
     final matches = [
       for (final entry in scan.byPath.entries)
-        if (entry.value.id == meta.id) entry.key,
+        if (entry.value.id == id) entry.key,
     ]..sort();
     if (matches.isEmpty) {
-      throw StateError('Implementation plan "${meta.id}" not found');
+      throw StateError('Implementation plan "$id" not found');
     }
     if (matches.length > 1) {
       // どれを更新すべきか決められない。黙って一方を選ぶと、もう一方が
       // 移動先で上書きされて消える。
-      throw StateError('Implementation plan "${meta.id}" exists in multiple '
+      throw StateError('Implementation plan "$id" exists in multiple '
           'files (${matches.join(", ")}). Remove the duplicate first.');
     }
+    return matches.first;
+  }
 
-    final currentRelative = matches.first;
+  @override
+  Future<String> readBody(String projectDir, String id) async {
+    final relative = await _locate(projectDir, id);
+    final content = await _fs.readFile(p.join(projectDir, relative));
+    if (content == null) {
+      throw StateError('Implementation plan "$id" is unreadable');
+    }
+    return _frontMatter.parse(content).body;
+  }
+
+  @override
+  Future<String?> update(String projectDir, ImplPlanMeta meta,
+      {String? logEntry}) async {
+    final currentRelative = await _locate(projectDir, meta.id);
     final currentPath = p.join(projectDir, currentRelative);
     final content = await _fs.readFile(currentPath);
     if (content == null) {
       throw StateError('Implementation plan "${meta.id}" is unreadable');
     }
-    // 本文には触れず frontmatter だけ差し替える
+    // 計画部分には触れず、frontmatter の差し替えと記録領域への追記だけ行う
     final parsed = _frontMatter.parse(content);
+    final body = logEntry == null
+        ? parsed.body
+        : ImplPlanBody.appendEntry(parsed.body, logEntry);
     final updated =
-        _frontMatter.render(ImplPlanFrontMatterModel.toMap(meta), parsed.body);
+        _frontMatter.render(ImplPlanFrontMatterModel.toMap(meta), body);
     await _fs.writeFile(currentPath, updated);
 
     final expectedRelative = _expectedRelativePath(meta);

@@ -1,6 +1,6 @@
 name: utakata
 description: A Dart CLI tool for building Flutter apps with pluggable architecture templates (Clean Architecture, MVVM, and more), designed for human and AI agent collaboration.
-version: 1.7.1
+version: 1.8.0
 homepage: https://github.com/utakata-code/utakata
 repository: https://github.com/utakata-code/utakata
 

@@ -451,7 +451,8 @@ class JaMessages implements CliMessages {
   @override
   String get cmdImplDesc => 'feature 実装計画の管理';
   @override
-  String get cmdImplNewDesc => '実装計画書を新規作成する';
+  String get cmdImplNewDesc =>
+      '実装計画書を新規作成する([kind:]<target>。kind は feat|fix|refactor|docs|chore|test、省略時 feat)';
   @override
   String get cmdImplListDesc => '実装計画の一覧を表示する';
   @override
@@ -459,7 +460,7 @@ class JaMessages implements CliMessages {
   @override
   String get cmdImplArchiveDesc => '完了済みの実装計画を archive/ へ移動する';
   @override
-  String implNewDone(String id, String path) => '✅ $id を作成しました: $path';
+  String implNewDone(String id, String path) => '$id を作成しました: $path';
   @override
   String get implListEmpty => '実装計画が見つかりませんでした';
   @override
@@ -504,7 +505,9 @@ class JaMessages implements CliMessages {
   @override
   String get optImplSkipReason => 'テスト不要とする理由';
   @override
-  String get implFeatureRequired => 'feature 名を指定してください: utakata impl new <feature>';
+  String get implFeatureRequired =>
+      '対象を指定してください: utakata impl new [kind:]<target>'
+      '(例: login / refactor:doc_layout)';
   @override
   String get implIdRequired => '実装計画 ID を指定してください(utakata impl list で確認)';
   @override
@@ -547,6 +550,33 @@ class JaMessages implements CliMessages {
   String implPlansMisplaced(int count, String samples) =>
       '実装計画 $count 件が frontmatter と違うレーンにあります($samples)。'
       '`utakata impl sync` で是正できます。';
+
+  // ─── impl の計画/記録の分離と凍結 (v1.8.0) ───
+  @override
+  String get cmdImplNoteDesc =>
+      '実施記録を 1 件追記する(本文は引数か stdin。計画部分には触れない)';
+  @override
+  String get cmdImplReviseDesc =>
+      '凍結後に書き換えた計画を改訂として受理する(revisions を +1)';
+  @override
+  String get optImplReviseReason => '計画を変更した理由(必須)';
+  @override
+  String get optImplSupersedes => 'この計画が置き換える旧計画の ID(例: PLAN-0001)';
+  @override
+  String get implNoteTextRequired =>
+      '記録の本文を指定してください: utakata impl note <ID> "本文"(または stdin)';
+  @override
+  String implNoteDone(String id) => '$id に記録を追記しました';
+  @override
+  String get implReviseReasonRequired =>
+      '--reason で変更理由を指定してください(改訂の記録に残ります)';
+  @override
+  String implReviseDone(String id, int revisions) =>
+      '$id を改訂として受理しました(改訂 $revisions 回目)';
+  @override
+  String implPlansDrifted(int count, String samples) =>
+      '実装計画 $count 件が凍結後に書き換えられています($samples)。'
+      '意図した変更なら `utakata impl revise <ID> --reason "..."` で受理してください。';
   @override
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md が古いバージョンのままです'

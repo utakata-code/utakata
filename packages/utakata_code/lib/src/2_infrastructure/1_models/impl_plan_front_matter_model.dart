@@ -42,6 +42,10 @@ abstract final class ImplPlanFrontMatterModel {
     return ImplPlanMeta(
       id: map['id'] as String,
       feature: map['feature'] as String,
+      // v1.8.0: 種別。無ければ feat(1.7.x 以前のファイルは全て feature の計画)
+      kind: map['kind'] == null
+          ? ImplPlanKind.feat
+          : ImplPlanKind.fromString(map['kind'].toString()),
       backlog: (map['backlog'] as String?) ?? '',
       status: ImplPlanMeta.statusFromString((map['status'] as String?) ?? 'todo'),
       test: test,
@@ -57,6 +61,14 @@ abstract final class ImplPlanFrontMatterModel {
       testSkipReason:
           testNode is Map ? testNode['skip_reason']?.toString() : null,
       completedOn: map['completed_on'] != null ? DateTime.parse(map['completed_on'] as String) : null,
+      // v1.8.0: 凍結・改訂・置き換え。1.7.x 以前のファイルには無い
+      planDigest: map['plan_digest']?.toString(),
+      revisions: switch (map['revisions']) {
+        final int n => n,
+        final String s => int.tryParse(s) ?? 0,
+        _ => 0,
+      },
+      supersedes: map['supersedes']?.toString(),
     );
   }
 
@@ -66,6 +78,7 @@ abstract final class ImplPlanFrontMatterModel {
   static Map<String, dynamic> toMap(ImplPlanMeta meta) => {
         'id': meta.id,
         'feature': meta.feature,
+        'kind': meta.kind.name,
         if (meta.backlog.isNotEmpty) 'backlog': meta.backlog,
         'status': ImplPlanMeta.statusToString(meta.status),
         'created': meta.created.toIso8601String().substring(0, 10),
@@ -85,5 +98,8 @@ abstract final class ImplPlanFrontMatterModel {
         },
         if (meta.completedOn != null)
           'completed_on': meta.completedOn!.toIso8601String().substring(0, 10),
+        if (meta.planDigest != null) 'plan_digest': meta.planDigest,
+        if (meta.revisions > 0) 'revisions': meta.revisions,
+        if (meta.supersedes != null) 'supersedes': meta.supersedes,
       };
 }
