@@ -279,6 +279,11 @@ abstract interface class CliMessages {
   String get cmdImplReviseDesc;
   String get optImplReviseReason;
   String get optImplSupersedes;
+  String get optImplAgreement;
+  String get optImplSpec;
+  String get optImplMessage;
+  String get optImplBasis;
+  String get optImplBacklog;
   String get implNoteTextRequired;
   String implNoteDone(String id);
   String get implReviseReasonRequired;

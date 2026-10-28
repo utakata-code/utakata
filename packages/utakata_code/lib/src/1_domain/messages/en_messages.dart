@@ -587,6 +587,21 @@ class EnMessages implements CliMessages {
   String get optImplSupersedes =>
       'ID of the older plan this one replaces (e.g. PLAN-0001)';
   @override
+  String get optImplAgreement =>
+      'Agreement IDs this plan is based on, comma-separated (e.g. AGR-003)';
+  @override
+  String get optImplSpec =>
+      'Spec file paths this plan is based on, comma-separated';
+  @override
+  String get optImplMessage =>
+      'Message IDs this plan is based on, comma-separated '
+      '(e.g. MSGR-20260811-001)';
+  @override
+  String get optImplBasis =>
+      'Whether the plan was agreed with the client or is your own judgment';
+  @override
+  String get optImplBacklog => 'Backlog item this plan belongs to (free text)';
+  @override
   String get implNoteTextRequired =>
       'Specify the note text: utakata impl note <ID> "text" (or via stdin)';
   @override

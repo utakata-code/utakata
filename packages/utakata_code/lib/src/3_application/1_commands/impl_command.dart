@@ -120,14 +120,18 @@ class _ImplNewCommand extends BaseCommand {
   String get name => 'new';
   @override
   String get description => _msg.cmdImplNewDesc;
+  @override
+  String get invocation => 'utakata impl new [kind:]<target> [options]';
 
   _ImplNewCommand(this._usecase, this._msg, this._writeFile) {
     argParser
-      ..addOption('backlog', defaultsTo: '')
-      ..addOption('agreement') // カンマ区切り
-      ..addOption('spec')
-      ..addOption('message')
-      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment'])
+      ..addOption('backlog', help: _msg.optImplBacklog)
+      ..addOption('agreement', help: _msg.optImplAgreement) // カンマ区切り
+      ..addOption('spec', help: _msg.optImplSpec)
+      ..addOption('message', help: _msg.optImplMessage)
+      ..addOption('basis',
+          help: _msg.optImplBasis,
+          allowed: ['client_agreed', 'developer_judgment'])
       ..addOption('supersedes', help: _msg.optImplSupersedes);
   }
 
@@ -149,7 +153,7 @@ class _ImplNewCommand extends BaseCommand {
       projectDir,
       feature: feature,
       kind: spec.kind,
-      backlog: argResults!['backlog'] as String,
+      backlog: (argResults!['backlog'] as String?) ?? '',
       agreements: _splitCsv(argResults!['agreement'] as String?),
       specs: _splitCsv(argResults!['spec'] as String?),
       messages: _splitCsv(argResults!['message'] as String?),
