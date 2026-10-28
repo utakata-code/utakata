@@ -6,6 +6,7 @@ import '../../1_domain/3_usecases/list_agreements_usecase.dart';
 import '../../1_domain/3_usecases/record_agreement_usecase.dart';
 import '../../1_domain/messages/cli_messages.dart';
 import '../../1_domain/services/actor_resolver.dart';
+import 'agreement_cli_support.dart';
 import 'base_command.dart';
 import 'logger.dart';
 
@@ -97,10 +98,13 @@ class _AgreeListCommand extends BaseCommand {
 
   @override
   Future<int> execute() async {
-    final agreements = await _usecase.execute(
+    final ledger = await _usecase.executeWithSkipped(
       Directory.current.path,
       unreflectedOnly: argResults!['unreflected'] as bool,
     );
+    final agreements = ledger.agreements;
+    // 壊れた行・add の無い ID は落とさずに飛ばし、何を飛ばしたかを見せる(#33)
+    warnSkippedAgreements(ledger.skipped, _msg);
 
     if (agreements.isEmpty) {
       Logger.warn(_msg.agreeListEmpty);
@@ -135,13 +139,19 @@ class _AgreeStatusCommand extends BaseCommand {
     final id = argResults!.rest[0];
     final status = argResults!.rest[1];
 
-    await _usecase.updateStatus(
-      Directory.current.path,
-      id,
-      status,
-      now: DateTime.now(),
-      recordedBy: _currentUser(),
-    );
+    try {
+      await _usecase.updateStatus(
+        Directory.current.path,
+        id,
+        status,
+        now: DateTime.now(),
+        recordedBy: _currentUser(),
+      );
+    } on Exception catch (e) {
+      final code = reportAgreementIdError(e, _msg);
+      if (code == null) rethrow;
+      return code;
+    }
     Logger.success(_msg.agreeStatusDone(id, status));
     return 0;
   }
@@ -171,15 +181,22 @@ class _AgreeCorrectCommand extends BaseCommand {
     }
     final correctsId = argResults!.rest.first;
 
-    final newId = await _usecase.correct(
-      Directory.current.path,
-      correctsId,
-      title: argResults!['title'] as String,
-      kindRaw: argResults!['kind'] as String,
-      items: argResults!['item'] as List<String>,
-      now: DateTime.now(),
-      recordedBy: _currentUser(),
-    );
+    final String newId;
+    try {
+      newId = await _usecase.correct(
+        Directory.current.path,
+        correctsId,
+        title: argResults!['title'] as String,
+        kindRaw: argResults!['kind'] as String,
+        items: argResults!['item'] as List<String>,
+        now: DateTime.now(),
+        recordedBy: _currentUser(),
+      );
+    } on Exception catch (e) {
+      final code = reportAgreementIdError(e, _msg);
+      if (code == null) rethrow;
+      return code;
+    }
 
     Logger.success('✅ $newId を作成し $correctsId を supersede しました');
     return 0;
@@ -209,14 +226,20 @@ class _AgreeReflectCommand extends BaseCommand {
     }
     final id = argResults!.rest.first;
 
-    await _usecase.reflect(
-      Directory.current.path,
-      id,
-      planId: argResults!['plan'] as String?,
-      spec: argResults!['spec'] as String?,
-      now: DateTime.now(),
-      recordedBy: _currentUser(),
-    );
+    try {
+      await _usecase.reflect(
+        Directory.current.path,
+        id,
+        planId: argResults!['plan'] as String?,
+        spec: argResults!['spec'] as String?,
+        now: DateTime.now(),
+        recordedBy: _currentUser(),
+      );
+    } on Exception catch (e) {
+      final code = reportAgreementIdError(e, _msg);
+      if (code == null) rethrow;
+      return code;
+    }
 
     Logger.success('✅ $id の反映を記録しました');
     return 0;

@@ -447,6 +447,30 @@ class JaMessages implements CliMessages {
   @override
   String agreeStatusDone(String id, String status) => '✅ $id の状態を $status に更新しました';
 
+  // ─── 合意 ID の検査と読み出しの警告 (v1.8.1, #33) ───
+  @override
+  String agreementIdInvalid(String quotedId) =>
+      '合意 ID の形が正しくありません: $quotedId(AGR-0001 の形で1件ずつ指定してください)。何も記録していません。';
+  @override
+  String agreementNotFound(String quotedId) =>
+      '合意 $quotedId は記録されていません(utakata agree list で確認)。何も記録していません。';
+  @override
+  String agreementSkippedUnparsable(int line) =>
+      'agreements.jsonl の $line 行目は JSON として読めないため飛ばしました(agreements.jsonl.corrupt に退避済み)';
+  @override
+  String agreementSkippedInvalid(int line) =>
+      'agreements.jsonl の $line 行目は合意の記録として解釈できないため飛ばしました';
+  @override
+  String agreementSkippedMissingAdd(String quotedId) =>
+      '$quotedId には合意の追加(add)の記録が無いため飛ばしました(存在しない ID への状態変更・反映など)';
+  @override
+  String agreementSkippedSummary(int count) =>
+      '合意の記録のうち $count 件を読めずに飛ばしました。agreements.jsonl を確認してください(追記専用のため、直すかは人間が判断してください)';
+  @override
+  String doctorAgreementsSkipped(int count, String sample) =>
+      'doc/records/agreements.jsonl に読めない記録が $count 件あります($sample)。'
+      '`utakata agree list` で詳細を確認できます。';
+
   // ─── impl (v0.9) ───
   @override
   String get cmdImplDesc => 'feature 実装計画の管理';

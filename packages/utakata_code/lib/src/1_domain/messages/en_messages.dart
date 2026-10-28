@@ -463,6 +463,30 @@ class EnMessages implements CliMessages {
   @override
   String agreeStatusDone(String id, String status) => '✅ Updated $id to $status';
 
+  // ─── Agreement ID checks and read warnings (v1.8.1, #33) ───
+  @override
+  String agreementIdInvalid(String quotedId) =>
+      'Invalid agreement ID: $quotedId (pass one ID like AGR-0001). Nothing was recorded.';
+  @override
+  String agreementNotFound(String quotedId) =>
+      'Agreement $quotedId is not recorded (check with utakata agree list). Nothing was recorded.';
+  @override
+  String agreementSkippedUnparsable(int line) =>
+      'Skipped agreements.jsonl line $line: not valid JSON (saved to agreements.jsonl.corrupt)';
+  @override
+  String agreementSkippedInvalid(int line) =>
+      'Skipped agreements.jsonl line $line: not a valid agreement event';
+  @override
+  String agreementSkippedMissingAdd(String quotedId) =>
+      'Skipped $quotedId: no add event (e.g. a status change or reflect on a non-existent ID)';
+  @override
+  String agreementSkippedSummary(int count) =>
+      'Skipped $count unreadable agreement record(s). Check agreements.jsonl (it is append-only; decide by hand whether to fix it)';
+  @override
+  String doctorAgreementsSkipped(int count, String sample) =>
+      'doc/records/agreements.jsonl has $count unreadable record(s) ($sample). '
+      'Run `utakata agree list` for details.';
+
   // ─── impl (v0.9) ───
   @override
   String get cmdImplDesc => 'Feature implementation plan management';

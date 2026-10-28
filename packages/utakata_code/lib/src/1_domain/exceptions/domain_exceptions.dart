@@ -36,6 +36,33 @@ final class FlutterNotFoundException extends UtakataDomainException {
         );
 }
 
+/// 合意 ID の形が正しくない(`AGR-` + 4桁以上の数字でない。改行混入など。#33)。
+final class InvalidAgreementIdException extends UtakataDomainException {
+  final String id;
+
+  InvalidAgreementIdException(this.id)
+      : super('Invalid agreement ID: ${quoteRecordId(id)} (expected AGR-NNNN).');
+}
+
+/// 合意 ID の形は正しいが、agreements.jsonl に記録が無い(#33)。
+final class AgreementNotFoundException extends UtakataDomainException {
+  final String id;
+
+  AgreementNotFoundException(this.id)
+      : super('Agreement ${quoteRecordId(id)} not found '
+            '(check with `utakata agree list`).');
+}
+
+/// 改行などの制御文字をエスケープして1行で見せる(不正な ID の表示用)。
+String quoteRecordId(String raw) {
+  final escaped = raw
+      .replaceAll(r'\', r'\\')
+      .replaceAll('\n', r'\n')
+      .replaceAll('\r', r'\r')
+      .replaceAll('\t', r'\t');
+  return '"$escaped"';
+}
+
 /// YAML 解析に失敗した
 final class YamlParseException extends UtakataDomainException {
   const YamlParseException(String path)
