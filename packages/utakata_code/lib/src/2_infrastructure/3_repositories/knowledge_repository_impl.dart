@@ -71,10 +71,8 @@ class KnowledgeRepositoryImpl implements KnowledgeRepository {
     stderr.writeln('📥 公式ナレッジ(utakata_arch_lib @ $ref)を取得しています…');
     try {
       final repoDir = Directory(p.join(cacheRoot, 'repo'));
-      if (repoDir.existsSync()) repoDir.deleteSync(recursive: true);
-      repoDir.parent.createSync(recursive: true);
-
-      await _git.cloneDepth1(url, ref, repoDir.path);
+      // 一時フォルダーに取ってから差し替える(失敗時は前回の repo/ を残す。Issue #32)
+      await _git.cloneDepth1Replacing(url, ref, repoDir.path);
       final sha = await _git.revParseHead(repoDir.path);
 
       final materialized = Directory(p.join(cacheRoot, 'materialized-$sha'));
@@ -108,10 +106,8 @@ class KnowledgeRepositoryImpl implements KnowledgeRepository {
 
     final cacheRoot = _cacheRoot(repoRef.url);
     final repoDir = Directory(p.join(cacheRoot, 'repo'));
-    if (repoDir.existsSync()) repoDir.deleteSync(recursive: true);
-    repoDir.parent.createSync(recursive: true);
-
-    await _git.cloneDepth1(repoRef.url, repoRef.ref, repoDir.path);
+    // 一時フォルダーに取ってから差し替える(失敗時は前回の repo/ を残す。Issue #32)
+    await _git.cloneDepth1Replacing(repoRef.url, repoRef.ref, repoDir.path);
     final sha = await _git.revParseHead(repoDir.path);
 
     final materialized = Directory(p.join(cacheRoot, 'materialized-$sha'));
