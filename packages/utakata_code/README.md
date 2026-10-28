@@ -151,7 +151,7 @@ features:
 | `utakata mcp` | Start a stateless, read-only MCP server over stdio (`structure_get`, `check_run`, `plan_get`, `log_query`, `agreements_query`, `guide_get`, `guide_for_file`, `config_get`, `doc_get`, `vault_list`, `vault_get`, plus `message_query` when `records.agent_read.messages` is enabled) |
 | `utakata vault list\|show\|get` | Browse the personal knowledge vault used to write client-facing explanations (configured via `vault:`, usually in `~/.utakata/config.yaml`) |
 | `utakata skills sync [--force]` | Sync the architecture's bundled SKILLs listed in `utakata.yaml` into `.claude/skills/` (managed-marker protection: human files are never overwritten) |
-| `utakata claude init [--force]` | Add or repair the Claude Code integration (`.claude/` + `.mcp.json` + `CLAUDE.md`) in an existing project. Default writes missing files only; `--force` regenerates everything |
+| `utakata claude init [--only <target>] [--force]` | Add or repair the Claude Code integration (`.claude/` + `.mcp.json` + `CLAUDE.md`) in an existing project. Default writes missing files only. `--only skills` (targets: `skills` / `agents` / `mcp` / `settings` / `claude-md`, repeatable) regenerates just those, overwriting them. `--force` regenerates everything; `settings.json` and `CLAUDE.md` are overwritten as whole files. `.mcp.json` only ever gets `mcpServers.utakata` added/replaced; other servers are kept |
 
 `diff` remains as a permanent alias for `check`. `scan`, `validate`, `feature init`, `core`, and `arch create` have been removed/renamed — see [CHANGELOG.md](CHANGELOG.md).
 

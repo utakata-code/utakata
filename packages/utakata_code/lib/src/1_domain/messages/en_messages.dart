@@ -621,7 +621,8 @@ class EnMessages implements CliMessages {
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md is from an older version '
       '(claude init never overwrites existing files). '
-      'Regenerate it with `utakata claude init --force`.';
+      'Regenerate it with `utakata claude init --only skills` '
+      '(not --force, which also overwrites settings.json and CLAUDE.md).';
 
 
   // ─── summary (v0.9) ───
@@ -668,7 +669,8 @@ class EnMessages implements CliMessages {
   @override
   String get cmdClaudeInitDesc =>
       'Write .claude/ (skills, agent, settings) + .mcp.json + CLAUDE.md. '
-      'Default repairs missing files only (existing ones are protected); --force regenerates';
+      'Default repairs missing files only (existing ones are protected); '
+      '--only regenerates the chosen targets, --force regenerates everything';
   @override
   String get cmdSkillsDesc => 'Sync architecture-bundled SKILLs into .claude/skills/';
   @override
@@ -716,7 +718,22 @@ class EnMessages implements CliMessages {
   String get optForceOverwrite =>
       'Also overwrite human-edited managed files (unmanaged files are never touched)';
   @override
-  String get optForceRegenerate => 'Overwrite existing files (including CLAUDE.md)';
+  String get optForceRegenerate =>
+      'Regenerate existing files too. .claude/settings.json and CLAUDE.md are '
+      'overwritten as whole files (hand-added settings and text are lost). '
+      '.mcp.json only gets the utakata entry added/replaced; other servers are kept. '
+      'Use --only to regenerate just some targets';
+  @override
+  String get optClaudeOnly =>
+      'Regenerate only the given targets, overwriting existing files '
+      '(repeatable: --only skills,agents). '
+      'skills = .claude/skills/utakata-*, agents = .claude/agents/, '
+      'mcp = .mcp.json (only the utakata entry is added/replaced), '
+      'settings = .claude/settings.json (overwritten), claude-md = CLAUDE.md (overwritten)';
+  @override
+  String claudeInitInvalidJson(String path) =>
+      '$path was not written: it is not valid JSON '
+      '(or mcpServers is not an object). Fix it and run again.';
   @override
   String get optUpdateRef => 'Re-resolve the ref and update';
   @override
