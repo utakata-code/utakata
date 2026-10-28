@@ -329,6 +329,8 @@ abstract interface class CliMessages {
   // ─── 新コマンドのオプション help ───
   String get optForceOverwrite;
   String get optForceRegenerate;
+  String get optClaudeOnly;
+  String claudeInitInvalidJson(String path);
   String get optUpdateRef;
   String get optExpandDryRun;
   String get optExpandFeature;

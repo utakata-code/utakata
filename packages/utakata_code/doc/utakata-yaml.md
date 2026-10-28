@@ -249,8 +249,9 @@ records:
 中間段階です。詳細・運用のコツは [records.md](records.md)
 (`utakata doc show records`)を参照してください。
 
-> **設定を変えたら** `utakata claude init --force` で `.claude/settings.json` を
-> 再生成してください(既存ファイルは上書きされません)。食い違いは `utakata doctor` が検出します。
+> **設定を変えたら** `utakata claude init --only settings` で `.claude/settings.json` を
+> 再生成してください(オプション無しの `claude init` は既存ファイルを上書きしません。
+> `--force` は CLAUDE.md も上書きします)。食い違いは `utakata doctor` が検出します。
 
 ---
 

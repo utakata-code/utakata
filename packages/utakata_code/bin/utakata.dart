@@ -337,6 +337,7 @@ Future<void> main(List<String> arguments) async {
     writeFile: fs.writeFile,
     ensureDir: fs.ensureDir,
     fileExists: fs.fileExists,
+    readFile: fs.readFile,
     configRepo: configRepo,
   );
 

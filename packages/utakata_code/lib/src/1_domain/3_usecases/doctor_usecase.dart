@@ -214,7 +214,7 @@ class DoctorUsecase {
     return [
       msg?.staleGeneratedSkill('utakata-impl-flow') ??
           '.claude/skills/utakata-impl-flow/SKILL.md が古いバージョンのままです。'
-              '`utakata claude init --force` で再生成してください。',
+              '`utakata claude init --only skills` で再生成してください。',
     ];
   }
 
@@ -253,7 +253,7 @@ class DoctorUsecase {
     if (denied != expectedDenied || allowsCli != expectedAllowsCli) {
       issues.add('.claude/settings.json が records.agent_write '
           '(${config.recordsAgentWrite})と一致していません。'
-          '`utakata claude init --force` で再生成してください。');
+          '`utakata claude init --only settings` で再生成してください。');
     }
     return issues;
   }

@@ -581,7 +581,8 @@ class JaMessages implements CliMessages {
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md が古いバージョンのままです'
       '(claude init は既存ファイルを上書きしません)。'
-      '`utakata claude init --force` で再生成してください。';
+      '`utakata claude init --only skills` で再生成してください'
+      '(--force は settings.json と CLAUDE.md も上書きするので使わない)。';
 
 
   // ─── summary (v0.9) ───
@@ -627,7 +628,8 @@ class JaMessages implements CliMessages {
   @override
   String get cmdClaudeInitDesc =>
       '.claude/(スキル・エージェント・settings)+ .mcp.json + CLAUDE.md を生成する。'
-      '既定は欠けているファイルのみ補修(既存は保護)。--force で再生成';
+      '既定は欠けているファイルのみ補修(既存は保護)。--only で対象を選んで再生成、'
+      '--force で全て再生成';
   @override
   String get cmdSkillsDesc => 'アーキテクチャ同梱 SKILL を .claude/skills/ へ同期する';
   @override
@@ -672,7 +674,21 @@ class JaMessages implements CliMessages {
   String get optForceOverwrite =>
       '人間が編集した managed ファイルも上書きする(マーカーの無いファイルは対象外)';
   @override
-  String get optForceRegenerate => '既存ファイル(CLAUDE.md 含む)も上書きして再生成する';
+  String get optForceRegenerate =>
+      '既存ファイルも上書きして再生成する。.claude/settings.json と CLAUDE.md は'
+      'ファイルごと上書きされる(手で足した設定・記述は消える)。'
+      '.mcp.json は utakata のエントリだけを追加・置換し、他のサーバーは残す。'
+      '一部だけ再生成するなら --only を使う';
+  @override
+  String get optClaudeOnly =>
+      '指定した対象だけを再生成する(既存も上書き。複数指定可: --only skills,agents)。'
+      'skills = .claude/skills/utakata-*、agents = .claude/agents/、'
+      'mcp = .mcp.json(utakata のエントリだけ追加・置換)、'
+      'settings = .claude/settings.json(上書き)、claude-md = CLAUDE.md(上書き)';
+  @override
+  String claudeInitInvalidJson(String path) =>
+      '$path が JSON として読めない(または mcpServers がオブジェクトでない)ため、'
+      '書き込みませんでした。内容を直してから再実行してください。';
   @override
   String get optUpdateRef => 'ref を再解決して更新する';
   @override

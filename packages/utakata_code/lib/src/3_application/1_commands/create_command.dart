@@ -60,7 +60,10 @@ class CreateCommand extends BaseCommand {
     );
 
     await _usecase.execute(spec);
-    await _claudeUsecase.execute(appName);
+    final claude = await _claudeUsecase.execute(appName);
+    for (final path in claude.invalidJson) {
+      Logger.warn(_msg.claudeInitInvalidJson(path));
+    }
     Logger.success(_msg.projectCreated(appName));
     return 0;
   }
