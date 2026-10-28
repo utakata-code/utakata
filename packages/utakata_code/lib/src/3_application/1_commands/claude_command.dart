@@ -75,7 +75,7 @@ class _ClaudeInitCommand extends BaseCommand {
 
     if (written.isEmpty) {
       if (only == null) {
-        Logger.info('すべて揃っています(生成対象なし)。再生成するには --force を指定してください。');
+        Logger.info('すべて揃っています(生成対象なし)。スキルだけ作り直すなら --only skills、全て上書きするなら --force(settings.json と CLAUDE.md も上書き)。');
       }
       return exitCode;
     }
@@ -83,7 +83,7 @@ class _ClaudeInitCommand extends BaseCommand {
       Logger.success('wrote: $path');
     }
     if (!force && only == null) {
-      Logger.dim('既存ファイルは保護されました。全て再生成するには --force。');
+      Logger.dim('既存ファイルは保護されました。スキルだけ作り直すなら --only skills、全て上書きするなら --force(settings.json と CLAUDE.md も上書き)。');
     }
     return exitCode;
   }

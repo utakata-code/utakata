@@ -48,7 +48,7 @@ utakata message show MSGR-20260811-001
 utakata message render          # doc/preview/messages/YYYY-MM.md を再生成
 
 # 後から要約ログ・合意に紐付ける(本文には触れない)
-utakata message link MSGR-20260811-001 --log MSG-20260811-003 --agreement AGR-003
+utakata message link MSGR-20260811-001 --log MSG-20260811-003 --agreement AGR-0003
 ```
 
 | オプション | 説明 |

@@ -587,7 +587,7 @@ class JaMessages implements CliMessages {
   @override
   String get optImplSupersedes => 'この計画が置き換える旧計画の ID(例: PLAN-0001)';
   @override
-  String get optImplAgreement => '根拠にした合意の ID。カンマ区切り(例: AGR-003)';
+  String get optImplAgreement => '根拠にした合意の ID。カンマ区切り(例: AGR-0003)';
   @override
   String get optImplSpec => '根拠にした仕様書のパス。カンマ区切り';
   @override

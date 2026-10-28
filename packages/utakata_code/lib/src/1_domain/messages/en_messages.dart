@@ -612,7 +612,7 @@ class EnMessages implements CliMessages {
       'ID of the older plan this one replaces (e.g. PLAN-0001)';
   @override
   String get optImplAgreement =>
-      'Agreement IDs this plan is based on, comma-separated (e.g. AGR-003)';
+      'Agreement IDs this plan is based on, comma-separated (e.g. AGR-0003)';
   @override
   String get optImplSpec =>
       'Spec file paths this plan is based on, comma-separated';
