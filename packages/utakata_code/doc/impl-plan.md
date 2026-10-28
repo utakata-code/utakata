@@ -163,7 +163,7 @@ utakata impl new docs:readme
 
 ```sh
 # 作成
-utakata impl new [kind:]<target> [--agreement AGR-003] [--spec <path>] [--basis client_agreed] [--supersedes PLAN-0001]
+utakata impl new [kind:]<target> [--agreement AGR-003] [--spec <path>] [--message MSGR-20260811-001] [--basis client_agreed] [--backlog <項目>] [--supersedes PLAN-0001]
 
 # 記録・改訂
 utakata impl note <ID> "本文"             # 実施記録を 1 件追記(stdin 可)

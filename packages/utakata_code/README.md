@@ -130,7 +130,7 @@ features:
 | `utakata message list\|show\|render\|link` | Query / print in full / regenerate `doc/preview/messages/` / attach a log or agreement reference |
 | `utakata agree add --title "..." --kind client_agreement\|internal_decision\|tentative [--amount] [--from <msg ids>]` | Record an agreement (`doc/records/agreements.jsonl`, append-only) |
 | `utakata agree status <id> <status>` / `correct <id>` / `reflect <id> --plan\|--spec` / `list [--unreflected]` | Update, supersede, or link an agreement; list unreflected ones |
-| `utakata impl new [kind:]<target> [--agreement] [--spec] [--basis] [--supersedes]` | Open an implementation plan (`doc/impl/1_todo/PLAN-NNNN_{feature}.md`). `kind` is `feat` (default), `fix`, `refactor`, `docs`, `chore` or `test`; `--supersedes` links the plan it replaces |
+| `utakata impl new [kind:]<target> [--agreement] [--spec] [--message] [--basis] [--backlog] [--supersedes]` | Open an implementation plan (`doc/impl/1_todo/PLAN-NNNN_{feature}.md`). `kind` is `feat` (default), `fix`, `refactor`, `docs`, `chore` or `test`; `--supersedes` links the plan it replaces |
 | `utakata impl note <id> "text"` / `revise <id> --reason` | Append a progress note (stdin works) / accept edits to a frozen plan as a revision |
 | `utakata impl start\|review\|done\|archive <id>` | Advance the implementation axis; the file moves to the matching lane |
 | `utakata impl test start\|review\|done\|todo\|skip <id>` | Advance the verification axis (only once implementation is `done`; `skip --reason` declares testing unnecessary) |
