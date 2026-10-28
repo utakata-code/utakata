@@ -294,10 +294,12 @@ Future<void> main(List<String> arguments) async {
     writeFile: fs.writeFile,
   );
 
-  final implPlanUsecase = ImplPlanUsecase(repo: implPlanRepo);
+  final implPlanUsecase =
+      ImplPlanUsecase(repo: implPlanRepo, agreementRepo: agreementRepo);
 
   final doctorUsecase = DoctorUsecase(
     driftedImplPlans: implPlanUsecase.listDrifted,
+    skippedAgreements: (dir) async => (await agreementRepo.load(dir)).skipped,
     detectMisplacedPlans: implPlanRepo.detectMisplaced,
     featuresWithImplPlan: featuresWithImplPlan,
     scanImplPlans: implPlanRepo.scanAll,
@@ -417,7 +419,8 @@ Future<void> main(List<String> arguments) async {
     docCommand: DocCommand(initDocUsecase, msg, showUsecase: showDocUsecase),
     logCommand: LogCommand(addLogEntryUsecase, queryLogUsecase, renderLogPreviewUsecase, msg),
     messageCommand: MessageCommand(recordMessageUsecase, importMessagesUsecase,
-        renderMessagesUsecase, messageRepo, msg),
+        renderMessagesUsecase, messageRepo, msg,
+        agreementRepo: agreementRepo),
     doctorCommand: DoctorCommand(doctorUsecase, msg),
     agreeCommand: AgreeCommand(recordAgreementUsecase, listAgreementsUsecase, msg),
     implCommand: ImplCommand(implPlanUsecase, msg, writeFile: fs.writeFile),

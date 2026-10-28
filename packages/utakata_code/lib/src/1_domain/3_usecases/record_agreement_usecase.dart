@@ -1,12 +1,19 @@
 import '../1_entities/record/agreement.dart';
 import '../2_repositories/agreement_repository.dart';
+import '../services/agreement_id_guard.dart';
 
 /// `utakata agree add/status/correct/reflect` — 合意の記録・状態遷移・
 /// 反映記録を行うユースケース(すべて追記イベントとして表現。仕様書 §7.2)。
+///
+/// 既存の合意 ID を受け取る操作(status / correct / reflect)は、書き込む前に
+/// ID の形と存在を確かめ、満たさなければ何も書かずに例外を投げる(#33)。
 class RecordAgreementUsecase {
   final AgreementRepository _repo;
+  final AgreementIdGuard _guard;
 
-  const RecordAgreementUsecase({required AgreementRepository repo}) : _repo = repo;
+  RecordAgreementUsecase({required AgreementRepository repo})
+      : _repo = repo,
+        _guard = AgreementIdGuard(repo);
 
   Future<String> add(
     String projectDir, {
@@ -50,6 +57,8 @@ class RecordAgreementUsecase {
     required DateTime now,
     required String recordedBy,
   }) async {
+    final status = AgreementEvent.statusFromString(statusRaw);
+    await _guard.ensureExists(projectDir, id);
     await _repo.appendEvent(
       projectDir,
       AgreementEvent(
@@ -57,7 +66,7 @@ class RecordAgreementUsecase {
         id: id,
         recordedAt: now,
         recordedBy: recordedBy,
-        status: AgreementEvent.statusFromString(statusRaw),
+        status: status,
         statusOn: now,
       ),
     );
@@ -72,7 +81,10 @@ class RecordAgreementUsecase {
     required DateTime now,
     required String recordedBy,
   }) async {
-    // 訂正は新しい ID で記録し、元エントリは superseded にする
+    // 訂正は新しい ID で記録し、元エントリは superseded にする。
+    // 2行を書くので、どちらかを書いた後で失敗しないよう先に全部確かめる
+    final kind = AgreementEvent.kindFromString(kindRaw);
+    await _guard.ensureExists(projectDir, correctsId);
     final newId = await _repo.nextId(projectDir);
     await _repo.appendEvent(
       projectDir,
@@ -82,7 +94,7 @@ class RecordAgreementUsecase {
         recordedAt: now,
         recordedBy: recordedBy,
         title: title,
-        kind: AgreementEvent.kindFromString(kindRaw),
+        kind: kind,
         status: AgreementStatus.agreed,
         items: items,
         correctsId: correctsId,
@@ -109,6 +121,7 @@ class RecordAgreementUsecase {
     required DateTime now,
     required String recordedBy,
   }) async {
+    await _guard.ensureExists(projectDir, id);
     await _repo.appendEvent(
       projectDir,
       AgreementEvent(

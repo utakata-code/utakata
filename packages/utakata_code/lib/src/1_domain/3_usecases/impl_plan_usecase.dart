@@ -1,5 +1,7 @@
 import '../1_entities/record/impl_plan_meta.dart';
+import '../2_repositories/agreement_repository.dart';
 import '../2_repositories/impl_plan_repository.dart';
+import '../services/agreement_id_guard.dart';
 import '../services/impl_plan_body.dart';
 
 /// `utakata impl` — feature 実装計画のライフサイクル管理(仕様書 §8)。
@@ -12,7 +14,14 @@ import '../services/impl_plan_body.dart';
 class ImplPlanUsecase {
   final ImplPlanRepository _repo;
 
-  const ImplPlanUsecase({required ImplPlanRepository repo}) : _repo = repo;
+  /// `--agreement` の存在確認に使う(#33)。未注入なら形だけを確かめる。
+  final AgreementRepository? _agreementRepo;
+
+  const ImplPlanUsecase({
+    required ImplPlanRepository repo,
+    AgreementRepository? agreementRepo,
+  })  : _repo = repo,
+        _agreementRepo = agreementRepo;
 
   /// feature 名として許す形。パス区切り・`..`・空文字を弾く
   /// (ファイル名に素で使うため、doc/impl の外へ書き出せてしまう)。
@@ -38,6 +47,16 @@ class ImplPlanUsecase {
     if (supersedes != null && await _repo.findById(projectDir, supersedes) == null) {
       // 存在しない ID を繋いでも辿れない。タイポをここで止める
       throw ArgumentError('superseded plan "$supersedes" not found');
+    }
+    // 根拠の合意 ID は frontmatter にそのまま書かれる。改行入りの値や
+    // 存在しない ID を残さないよう、書く前に確かめる(#33)。
+    // カンマ区切りの前後の空白(`AGR-0001, AGR-0002`)は許して落とす
+    agreements = [for (final a in agreements) a.trim()];
+    final agreementRepo = _agreementRepo;
+    if (agreementRepo == null) {
+      agreements.forEach(AgreementIdGuard.ensureWellFormed);
+    } else {
+      await AgreementIdGuard(agreementRepo).ensureAllExist(projectDir, agreements);
     }
     final id = await _repo.nextId(projectDir);
     final meta = ImplPlanMeta(
