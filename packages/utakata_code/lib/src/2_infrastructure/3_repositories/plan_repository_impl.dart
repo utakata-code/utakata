@@ -136,27 +136,108 @@ class PlanRepositoryImpl implements PlanRepository {
     final index = _yamlEdit.indexOfFeature(existing, featureName);
     if (index < 0) return false;
 
-    // `layers` が未作成なら Map ごと1回で書く(ブロックスタイルになり人間が
-    // 編集しやすい)。既にある場合はキー単位で更新し、利用者が書いた
-    // コメント・並びを壊さない。
-    final hasLayers =
-        _yamlEdit.hasNode(existing, ['features', index, 'layers']);
-    if (!hasLayers) {
-      final updated = _yamlEdit
-          .setAt(existing, ['features', index, 'layers'], declarations);
-      await _fs.writeFile(path, updated);
-      return true;
-    }
+    await _fs.writeFile(
+        path, _mergeDeclarations(existing, index, declarations));
+    return true;
+  }
 
+  @override
+  Future<List<String>> setLayerDeclarationsForFeatures(
+    String projectDir,
+    Map<String, Map<String, List<String>>> declarationsByFeature,
+  ) async {
+    final path = p.join(projectDir, _planYamlPath);
+    final existing = await _fs.readFile(path);
+    if (existing == null) return const [];
+
+    // 全 feature の編集をメモリ上で組んでから 1 回だけ書く(Issue #28)。
+    // 途中で失敗しても plan.yaml が一部だけ書き換わった状態で残らない。
     var content = existing;
-    for (final entry in declarations.entries) {
-      content = _yamlEdit.setAt(
-        content,
-        ['features', index, 'layers', entry.key],
-        entry.value,
-      );
+    final updated = <String>[];
+    for (final entry in declarationsByFeature.entries) {
+      if (entry.value.isEmpty) continue;
+      final index = _yamlEdit.indexOfFeature(content, entry.key);
+      if (index < 0) continue;
+      content = _mergeDeclarations(content, index, entry.value);
+      updated.add(entry.key);
     }
-    await _fs.writeFile(path, content);
+    if (content != existing) await _fs.writeFile(path, content);
+    return updated;
+  }
+
+  /// [index] 番目の feature の `layers` に [declarations] をマージした内容を返す。
+  ///
+  /// `layers` が未作成なら Map ごと1回で書く(ブロックスタイルになり人間が
+  /// 編集しやすい)。既にある場合はキー単位で更新し、利用者が書いた
+  /// コメント・並びを壊さない。新しいキーは末尾に足す(Issue #28)。
+  String _mergeDeclarations(
+    String content,
+    int index,
+    Map<String, List<String>> declarations,
+  ) {
+    final featurePath = <Object>['features', index];
+    if (!_yamlEdit.hasNode(content, [...featurePath, 'layers'])) {
+      return _setKey(content, featurePath, 'layers', declarations);
+    }
+    var updated = content;
+    for (final entry in declarations.entries) {
+      updated =
+          _setKey(updated, [...featurePath, 'layers'], entry.key, entry.value);
+    }
+    return updated;
+  }
+
+  /// [mapPath] のマップの [key] を [value] にする。キーが既にあれば値だけを
+  /// 置き換え、無ければマップの末尾に足す(yaml_edit の差し込み位置の不具合を
+  /// 避ける。Issue #28)。
+  String _setKey(
+    String content,
+    List<Object> mapPath,
+    String key,
+    Object value,
+  ) {
+    if (_yamlEdit.hasKey(content, mapPath, key)) {
+      return _yamlEdit.setAt(content, [...mapPath, key], value);
+    }
+    return _yamlEdit.appendKeyToBlockMap(content, mapPath, key, value);
+  }
+
+  @override
+  Future<bool> appendLayerItems(
+    String projectDir,
+    String featureName,
+    String layerPath,
+    List<String> items,
+  ) async {
+    final path = p.join(projectDir, _planYamlPath);
+    final existing = await _fs.readFile(path);
+    if (existing == null) return false;
+
+    final index = _yamlEdit.indexOfFeature(existing, featureName);
+    if (index < 0) return false;
+
+    final unique = <String>[];
+    for (final item in items) {
+      if (!unique.contains(item)) unique.add(item);
+    }
+    if (unique.isEmpty) return true;
+
+    final layerNodePath = <Object>['features', index, 'layers', layerPath];
+    final current = _yamlEdit.valueAt(existing, layerNodePath);
+    final String updated;
+    if (current is List) {
+      // 一覧を丸ごと置き換えると途中の行のコメントが消え、最後のコメントが
+      // 新しい行へ移る(Issue #29)。足りない項目だけを1件ずつ追記する。
+      var content = existing;
+      for (final item in unique) {
+        if (current.contains(item)) continue;
+        content = _yamlEdit.appendToList(content, layerNodePath, item);
+      }
+      updated = content;
+    } else {
+      updated = _mergeDeclarations(existing, index, {layerPath: unique});
+    }
+    if (updated != existing) await _fs.writeFile(path, updated);
     return true;
   }
 

@@ -179,6 +179,16 @@ class _FakePlanRepo implements PlanRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<String>> setLayerDeclarationsForFeatures(String projectDir,
+          Map<String, Map<String, List<String>>> declarationsByFeature) =>
+      throw UnimplementedError();
+
+  @override
+  Future<bool> appendLayerItems(String projectDir, String featureName,
+          String layerPath, List<String> items) =>
+      throw UnimplementedError();
+
+  @override
   Future<bool> removeLayerItem(String projectDir, String featureName,
           String layerPath, String item) =>
       throw UnimplementedError();

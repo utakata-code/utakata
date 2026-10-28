@@ -180,15 +180,17 @@ class _PlanAddCommand extends BaseCommand {
       return 66;
     }
 
-    // 既存宣言があればそれに追記、無ければ新規作成(重複は除く)
+    // 既存宣言があればそれに追記、無ければ新規作成(重複は除く)。
+    // 一覧を丸ごと置き換えるとコメントがずれるため、足りない項目だけを
+    // 追記する(Issue #29)
     final current = feature.declarationFor(layerPath) ?? const <String>[];
     final merged = <String>[...current];
     for (final item in newItems) {
       if (!merged.contains(item)) merged.add(item);
     }
 
-    final ok = await _planRepo.setLayerDeclarations(
-        projectDir, featureName, {layerPath: merged});
+    final ok = await _planRepo.appendLayerItems(
+        projectDir, featureName, layerPath, newItems);
     if (!ok) {
       Logger.error('plan.yaml の更新に失敗しました。');
       return 1;

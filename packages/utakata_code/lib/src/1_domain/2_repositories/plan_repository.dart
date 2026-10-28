@@ -25,6 +25,24 @@ abstract interface class PlanRepository {
     Map<String, List<String>> declarations,
   );
 
+  /// 複数 feature の `layers` へ層宣言をまとめてマージし、plan.yaml へは
+  /// 1 回だけ書き込む(`plan expand`。Issue #28)。途中で失敗した場合は何も
+  /// 書かない。plan.yaml に見つかった(書き込んだ)feature 名を返す。
+  Future<List<String>> setLayerDeclarationsForFeatures(
+    String projectDir,
+    Map<String, Map<String, List<String>>> declarationsByFeature,
+  );
+
+  /// [layerPath] の宣言へ、まだ無い [items] だけを末尾に追記する(`plan add`。
+  /// Issue #29)。既存の項目・コメント・並びは変えない。層の宣言が無ければ
+  /// 作る。feature が見つからなければ false を返す。
+  Future<bool> appendLayerItems(
+    String projectDir,
+    String featureName,
+    String layerPath,
+    List<String> items,
+  );
+
   /// [layerPath] の宣言から [item] を1件削除する。
   /// feature・層宣言・項目のいずれかが無ければ false を返す。
   Future<bool> removeLayerItem(
