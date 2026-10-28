@@ -59,6 +59,7 @@ class ExpandPlanUsecase {
 
     final architectures = await resolveArchitectures(plan, _archRepo);
     final results = <ExpandedFeature>[];
+    final toWrite = <String, Map<String, List<String>>>{};
 
     for (final feature in plan.features) {
       if (onlyFeature != null && feature.name != onlyFeature) continue;
@@ -79,15 +80,19 @@ class ExpandPlanUsecase {
         derived[layerPath] = items;
       }
 
-      if (!dryRun && derived.isNotEmpty) {
-        await _planRepo.setLayerDeclarations(projectDir, feature.name, derived);
-      }
+      if (derived.isNotEmpty) toWrite[feature.name] = derived;
 
       results.add(ExpandedFeature(
         name: feature.name,
         layers: derived,
         skipped: skipped,
       ));
+    }
+
+    // 全 feature 分をまとめて 1 回で書く(途中で失敗しても plan.yaml を
+    // 一部だけ書き換えた状態で残さない。Issue #28)
+    if (!dryRun && toWrite.isNotEmpty) {
+      await _planRepo.setLayerDeclarationsForFeatures(projectDir, toWrite);
     }
 
     return results;
