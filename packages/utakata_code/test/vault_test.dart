@@ -130,4 +130,107 @@ void main() {
       expect(await repo.resolveRoot(projectDir), vaultDir);
     });
   });
+
+  group('vault get の失敗で前回の取得結果を消さない (Issue #32)', () {
+    const url = 'https://example.invalid/vault.git';
+    late _FakeGit git;
+    late VaultRepositoryImpl fetchRepo;
+
+    setUp(() {
+      git = _FakeGit();
+      final configRepo = ConfigRepositoryImpl(
+          const FilesystemDataSource(), const YamlDataSource(),
+          homeDir: homeDir);
+      fetchRepo = VaultRepositoryImpl(configRepo, git, homeDir);
+      writeGlobalConfig('vault:\n  url: "$url"\n');
+    });
+
+    List<String> siblingsOf(String dir) => Directory(dir)
+        .parent
+        .listSync()
+        .map((e) => e.uri.pathSegments.where((s) => s.isNotEmpty).last)
+        .toList();
+
+    test('成功すると取り直した内容に差し替わる', () async {
+      git.content = '# Old\n';
+      final first = await fetchRepo.fetch(projectDir);
+      git.content = '# New\n';
+      final second = await fetchRepo.fetch(projectDir);
+
+      expect(second, first);
+      expect(await fetchRepo.read(projectDir, 'Entry'), '# New\n');
+      expect(siblingsOf(second!), ['repo']);
+    });
+
+    test('取得に失敗しても前回のキャッシュが残り、一時フォルダーも残らない', () async {
+      git.content = '# Old\n';
+      final path = await fetchRepo.fetch(projectDir);
+
+      git.fail = true;
+      await expectLater(fetchRepo.fetch(projectDir), throwsException);
+
+      expect(await fetchRepo.resolveRoot(projectDir), path);
+      expect((await fetchRepo.list(projectDir)).map((e) => e.id), ['Entry']);
+      expect(await fetchRepo.read(projectDir, 'Entry'), '# Old\n');
+      expect(siblingsOf(path!), ['repo']);
+    });
+
+    test('git が無くても前回のキャッシュは残る', () async {
+      git.content = '# Old\n';
+      final path = await fetchRepo.fetch(projectDir);
+
+      final noGitRepo = VaultRepositoryImpl(
+          ConfigRepositoryImpl(
+              const FilesystemDataSource(), const YamlDataSource(),
+              homeDir: homeDir),
+          const GitDataSource(executable: 'utakata-no-such-git-cmd'),
+          homeDir);
+      await expectLater(
+          noGitRepo.fetch(projectDir), throwsA(isA<GitNotFoundException>()));
+
+      expect(await fetchRepo.read(projectDir, 'Entry'), '# Old\n');
+      expect(siblingsOf(path!), ['repo']);
+    });
+  });
+
+  group('git が見つからないときの案内 (Issue #32)', () {
+    test('clone は GitNotFoundException になり、path: と git の導入を案内する',
+        () async {
+      const git = GitDataSource(executable: 'utakata-no-such-git-cmd');
+      final target = '${tempDir.path}/clone_target';
+      Object? error;
+      try {
+        await git.cloneDepth1('https://example.invalid/x.git', null, target);
+      } catch (e) {
+        error = e;
+      }
+      expect(error, isA<GitNotFoundException>());
+      final message = error.toString();
+      expect(message, contains('git が見つかりません'));
+      expect(message, contains('path:'));
+      expect(message, contains('git をインストール'));
+    });
+
+    test('rev-parse も GitNotFoundException になる', () async {
+      const git = GitDataSource(executable: 'utakata-no-such-git-cmd');
+      await expectLater(
+          git.revParseHead(tempDir.path), throwsA(isA<GitNotFoundException>()));
+    });
+  });
+}
+
+/// clone の代わりに `Entry.md` を書くだけの git(ネットワーク・git 不要)。
+class _FakeGit extends GitDataSource {
+  String content = '';
+  bool fail = false;
+
+  _FakeGit();
+
+  @override
+  Future<void> cloneDepth1(String url, String? ref, String targetDir) async {
+    // 実際の git と同じく、途中まで書いてから失敗するケースを再現する
+    Directory(targetDir).createSync(recursive: true);
+    File('$targetDir/Entry.md').writeAsStringSync(fail ? '# Broken\n' : content);
+    if (fail) throw Exception('git clone failed (128): network unreachable');
+  }
 }
