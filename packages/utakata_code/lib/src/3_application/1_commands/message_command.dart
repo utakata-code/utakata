@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 
 import '../../1_domain/1_entities/record/message_record.dart';
+import '../../1_domain/2_repositories/agreement_repository.dart';
 import '../../1_domain/2_repositories/message_repository.dart';
 import '../../1_domain/3_usecases/import_messages_usecase.dart';
 import '../../1_domain/3_usecases/record_message_usecase.dart';
 import '../../1_domain/3_usecases/render_messages_usecase.dart';
 import '../../1_domain/messages/cli_messages.dart';
 import '../../1_domain/services/actor_resolver.dart';
+import '../../1_domain/services/agreement_id_guard.dart';
+import 'agreement_cli_support.dart';
 import 'base_command.dart';
 import 'logger.dart';
 
@@ -30,14 +33,15 @@ class MessageCommand extends Command<int> {
     ImportMessagesUsecase importUsecase,
     RenderMessagesUsecase renderUsecase,
     MessageRepository repo,
-    this._msg,
-  ) {
+    this._msg, {
+    AgreementRepository? agreementRepo,
+  }) {
     addSubcommand(_MessageAddCommand(recordUsecase, _msg));
     addSubcommand(_MessageImportCommand(importUsecase, _msg));
     addSubcommand(_MessageListCommand(repo, _msg));
     addSubcommand(_MessageShowCommand(repo, _msg));
     addSubcommand(_MessageRenderCommand(renderUsecase, _msg));
-    addSubcommand(_MessageLinkCommand(repo, _msg));
+    addSubcommand(_MessageLinkCommand(repo, _msg, agreementRepo));
   }
 
   @override
@@ -314,12 +318,15 @@ class _MessageLinkCommand extends BaseCommand {
   final MessageRepository _repo;
   final CliMessages _msg;
 
+  /// `--agreement` の存在確認に使う(#33)。未注入なら形だけを確かめる。
+  final AgreementRepository? _agreementRepo;
+
   @override
   String get name => 'link';
   @override
   String get description => _msg.cmdMessageLinkDesc;
 
-  _MessageLinkCommand(this._repo, this._msg) {
+  _MessageLinkCommand(this._repo, this._msg, this._agreementRepo) {
     argParser
       ..addOption('log', help: _msg.optMessageLogRef)
       ..addOption('agreement', help: _msg.optMessageAgreementRef);
@@ -339,6 +346,22 @@ class _MessageLinkCommand extends BaseCommand {
     }
 
     final id = argResults!.rest.first;
+    if (agreementRef != null) {
+      // 不正・存在しない合意 ID を紐付けない(#33)
+      try {
+        final agreementRepo = _agreementRepo;
+        if (agreementRepo == null) {
+          AgreementIdGuard.ensureWellFormed(agreementRef);
+        } else {
+          await AgreementIdGuard(agreementRepo)
+              .ensureExists(Directory.current.path, agreementRef);
+        }
+      } on Exception catch (e) {
+        final code = reportAgreementIdError(e, _msg);
+        if (code == null) rethrow;
+        return code;
+      }
+    }
     final ok = await _repo.link(Directory.current.path, id,
         logRef: logRef, agreementRef: agreementRef);
     if (!ok) {

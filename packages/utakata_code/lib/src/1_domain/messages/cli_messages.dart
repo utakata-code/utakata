@@ -235,6 +235,16 @@ abstract interface class CliMessages {
   String get agreeListEmpty;
   String agreeStatusDone(String id, String status);
 
+  // ─── 合意 ID の検査と読み出しの警告 (v1.8.1, #33) ───
+  /// [quotedId] は改行などをエスケープ済みの、引用符付きの値。
+  String agreementIdInvalid(String quotedId);
+  String agreementNotFound(String quotedId);
+  String agreementSkippedUnparsable(int line);
+  String agreementSkippedInvalid(int line);
+  String agreementSkippedMissingAdd(String quotedId);
+  String agreementSkippedSummary(int count);
+  String doctorAgreementsSkipped(int count, String sample);
+
   // ─── impl (v0.9) ───
   String get cmdImplDesc;
   String get cmdImplNewDesc;
@@ -279,6 +289,11 @@ abstract interface class CliMessages {
   String get cmdImplReviseDesc;
   String get optImplReviseReason;
   String get optImplSupersedes;
+  String get optImplAgreement;
+  String get optImplSpec;
+  String get optImplMessage;
+  String get optImplBasis;
+  String get optImplBacklog;
   String get implNoteTextRequired;
   String implNoteDone(String id);
   String get implReviseReasonRequired;
@@ -329,6 +344,8 @@ abstract interface class CliMessages {
   // ─── 新コマンドのオプション help ───
   String get optForceOverwrite;
   String get optForceRegenerate;
+  String get optClaudeOnly;
+  String claudeInitInvalidJson(String path);
   String get optUpdateRef;
   String get optExpandDryRun;
   String get optExpandFeature;

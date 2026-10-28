@@ -1,5 +1,51 @@
+import 'dart:convert';
+
 import '../1_entities/config/utakata_config_entity.dart';
 import '../2_repositories/config_repository.dart';
+
+/// `claude init --only` で選べる生成対象。
+///
+/// [cliName] はコマンドラインで指定する名前(`--only skills` 等)。
+enum ClaudeIntegrationTarget {
+  /// `.claude/skills/utakata-*/SKILL.md`
+  skills('skills'),
+
+  /// `.claude/agents/*.md`
+  agents('agents'),
+
+  /// `.mcp.json`(`mcpServers.utakata` だけを追加・置換する)
+  mcp('mcp'),
+
+  /// `.claude/settings.json`(ファイルごと上書き)
+  settings('settings'),
+
+  /// `CLAUDE.md`(ファイルごと上書き)
+  claudeMd('claude-md');
+
+  final String cliName;
+  const ClaudeIntegrationTarget(this.cliName);
+
+  static ClaudeIntegrationTarget? fromCliName(String name) {
+    for (final target in values) {
+      if (target.cliName == name) return target;
+    }
+    return null;
+  }
+}
+
+/// [GenerateClaudeIntegrationUsecase.execute] の結果。
+class ClaudeIntegrationResult {
+  /// 書き込んだ相対パス。
+  final List<String> written;
+
+  /// JSON として読めなかったため書き込まなかった相対パス(現状 `.mcp.json` のみ)。
+  final List<String> invalidJson;
+
+  const ClaudeIntegrationResult({
+    required this.written,
+    this.invalidJson = const [],
+  });
+}
 
 /// `create` 時に `.claude/` と `.mcp.json` を生成するユースケース(仕様書 §11)。
 ///
@@ -10,20 +56,27 @@ import '../2_repositories/config_repository.dart';
 /// v1.0.0(S1)から `CLAUDE.md` も生成する。`utakata.yaml` に `team:` が
 /// 定義されていれば「登場人物と役割」節を含め、AI が誰の決定に従うべきかを
 /// セッション冒頭から把握できるようにする。既存の CLAUDE.md は上書きしない。
+///
+/// `.mcp.json` は利用者が他の MCP サーバーを足していることがあるため、
+/// 上書きする場面でもファイルごとは置き換えず、`mcpServers.utakata` だけを
+/// 追加・置換する(#30)。JSON として読めないときは書かずに結果で知らせる。
 class GenerateClaudeIntegrationUsecase {
   final Future<void> Function(String path, String content) _writeFile;
   final Future<void> Function(String path) _ensureDir;
   final bool Function(String path)? _fileExists;
+  final Future<String?> Function(String path)? _readFile;
   final ConfigRepository? _configRepo;
 
   const GenerateClaudeIntegrationUsecase({
     required Future<void> Function(String path, String content) writeFile,
     required Future<void> Function(String path) ensureDir,
     bool Function(String path)? fileExists,
+    Future<String?> Function(String path)? readFile,
     ConfigRepository? configRepo,
   })  : _writeFile = writeFile,
         _ensureDir = ensureDir,
         _fileExists = fileExists,
+        _readFile = readFile,
         _configRepo = configRepo;
 
   /// [skipExisting] が true の場合、既に存在するファイルには一切触れない
@@ -31,23 +84,43 @@ class GenerateClaudeIntegrationUsecase {
   /// false(create の既定・`claude init --force`)は CLAUDE.md 以外を上書きする。
   /// [forceClaudeMd] は既存 CLAUDE.md も上書きする(`claude init --force` 専用)。
   ///
-  /// 書き込んだ相対パスの一覧を返す。
-  Future<List<String>> execute(
+  /// [only] を指定すると、その対象だけを書く。選んだ対象は既存でも上書きする
+  /// (`claude init --only skills` 等。claude-md を選べば CLAUDE.md も上書き)。
+  /// このとき [skipExisting] と [forceClaudeMd] は無視する。
+  ///
+  /// 上書きするモードでも、既存の `.mcp.json` は `mcpServers.utakata` だけを
+  /// 追加・置換して他のエントリを残す。
+  Future<ClaudeIntegrationResult> execute(
     String projectDir, {
     bool skipExisting = false,
     bool forceClaudeMd = false,
+    Set<ClaudeIntegrationTarget>? only,
   }) async {
-    await _ensureDir('$projectDir/.claude/skills/utakata-structure');
-    await _ensureDir('$projectDir/.claude/skills/utakata-client-context');
-    await _ensureDir('$projectDir/.claude/skills/utakata-impl-flow');
-    await _ensureDir('$projectDir/.claude/skills/utakata-client-explainer');
-    await _ensureDir('$projectDir/.claude/agents');
+    bool includes(ClaudeIntegrationTarget target) =>
+        only == null || only.contains(target);
+    if (only != null) {
+      skipExisting = false;
+      forceClaudeMd = only.contains(ClaudeIntegrationTarget.claudeMd);
+    }
+
+    if (includes(ClaudeIntegrationTarget.skills)) {
+      await _ensureDir('$projectDir/.claude/skills/utakata-structure');
+      await _ensureDir('$projectDir/.claude/skills/utakata-client-context');
+      await _ensureDir('$projectDir/.claude/skills/utakata-impl-flow');
+      await _ensureDir('$projectDir/.claude/skills/utakata-client-explainer');
+    }
+    if (includes(ClaudeIntegrationTarget.agents)) {
+      await _ensureDir('$projectDir/.claude/agents');
+    }
 
     final written = <String>[];
+    final invalidJson = <String>[];
+    final fileExists = _fileExists;
+    bool exists(String path) => fileExists != null && fileExists(path);
+
     Future<void> write(String relativePath, String content) async {
       final path = '$projectDir/$relativePath';
-      final fileExists = _fileExists;
-      if (skipExisting && fileExists != null && fileExists(path)) return;
+      if (skipExisting && exists(path)) return;
       await _writeFile(path, content);
       written.add(relativePath);
     }
@@ -56,24 +129,78 @@ class GenerateClaudeIntegrationUsecase {
     // CLAUDE.md の両方に反映する(v1.6.0)。
     final config = await _configRepo?.read(projectDir);
 
-    await write('.mcp.json', _mcpJson());
-    await write('.claude/settings.json', _settingsJson(config));
-    await write('.claude/skills/utakata-structure/SKILL.md', _structureSkill());
-    await write(
-        '.claude/skills/utakata-client-context/SKILL.md',
-        _clientContextSkill(config));
-    await write('.claude/skills/utakata-impl-flow/SKILL.md', _implFlowSkill());
-    await write('.claude/skills/utakata-client-explainer/SKILL.md',
-        _clientExplainerSkill());
-    await write('.claude/agents/structure-auditor.md', _structureAuditorAgent());
-
-    final claudeMdPath = '$projectDir/CLAUDE.md';
-    final fileExists = _fileExists;
-    if (forceClaudeMd || fileExists == null || !fileExists(claudeMdPath)) {
-      await _writeFile(claudeMdPath, _claudeMd(config));
-      written.add('CLAUDE.md');
+    if (includes(ClaudeIntegrationTarget.mcp)) {
+      const relativePath = '.mcp.json';
+      final path = '$projectDir/$relativePath';
+      if (!(skipExisting && exists(path))) {
+        final existing = exists(path) ? await _readFile?.call(path) : null;
+        final merged = existing == null ? _mcpJson() : _mergeMcpJson(existing);
+        if (merged == null) {
+          invalidJson.add(relativePath);
+        } else if (merged != existing) {
+          await _writeFile(path, merged);
+          written.add(relativePath);
+        }
+      }
     }
-    return written;
+    if (includes(ClaudeIntegrationTarget.settings)) {
+      await write('.claude/settings.json', _settingsJson(config));
+    }
+    if (includes(ClaudeIntegrationTarget.skills)) {
+      await write(
+          '.claude/skills/utakata-structure/SKILL.md', _structureSkill());
+      await write('.claude/skills/utakata-client-context/SKILL.md',
+          _clientContextSkill(config));
+      await write(
+          '.claude/skills/utakata-impl-flow/SKILL.md', _implFlowSkill());
+      await write('.claude/skills/utakata-client-explainer/SKILL.md',
+          _clientExplainerSkill());
+    }
+    if (includes(ClaudeIntegrationTarget.agents)) {
+      await write(
+          '.claude/agents/structure-auditor.md', _structureAuditorAgent());
+    }
+
+    if (includes(ClaudeIntegrationTarget.claudeMd)) {
+      final claudeMdPath = '$projectDir/CLAUDE.md';
+      if (forceClaudeMd || !exists(claudeMdPath)) {
+        await _writeFile(claudeMdPath, _claudeMd(config));
+        written.add('CLAUDE.md');
+      }
+    }
+    return ClaudeIntegrationResult(written: written, invalidJson: invalidJson);
+  }
+
+  /// utakata の MCP サーバー定義(`.mcp.json` の `mcpServers.utakata`)。
+  static const Map<String, Object> _utakataMcpServer = {
+    'command': 'utakata',
+    'args': ['mcp'],
+  };
+
+  /// 既存の `.mcp.json` に `mcpServers.utakata` だけを追加・置換する。
+  ///
+  /// 既に同じ定義があれば [existing] をそのまま返す(書式を崩さない)。
+  /// JSON として読めない・構造が想定外(ルートや `mcpServers` が
+  /// オブジェクトでない)なら null を返し、呼び出し側は書き込まない。
+  String? _mergeMcpJson(String existing) {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(existing);
+    } on FormatException {
+      return null;
+    }
+    if (decoded is! Map<String, dynamic>) return null;
+    final servers = decoded['mcpServers'] ?? <String, dynamic>{};
+    if (servers is! Map<String, dynamic>) return null;
+
+    final current = servers['utakata'];
+    if (current is Map &&
+        jsonEncode(current) == jsonEncode(_utakataMcpServer)) {
+      return existing;
+    }
+    servers['utakata'] = _utakataMcpServer;
+    decoded['mcpServers'] = servers;
+    return '${const JsonEncoder.withIndent('  ').convert(decoded)}\n';
   }
 
   /// `records.agent_write` に応じた CLAUDE.md の記述(settings.json と連動)。

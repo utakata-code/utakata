@@ -35,19 +35,26 @@ utakata doctor
 `CLAUDE.md` も作り直すので、人が足した hooks・permissions・CLAUDE.md の記述が
 消える。
 
-代わりに、古いと言われたスキルの SKILL.md だけを消して `claude init` を
-通常実行する。`claude init` は**無いファイルだけ**を書くので、そのスキルだけが
-新しい内容で生成され、他のファイルには触れない。
+代わりに `--only skills` でスキルだけを再生成する。`settings.json`・
+`CLAUDE.md`・`.mcp.json`・`.claude/agents/` には触れない。
+
+```bash
+utakata claude init --only skills
+git diff --stat              # .claude/skills/utakata-*/SKILL.md だけが変わっていること
+utakata doctor               # 指摘が消えていること
+```
+
+`--only skills` は utakata が生成する**スキルをすべて**上書きする。スキルを
+**人が編集していた**場合は、実行前に差分を確認してユーザーに聞く。
+生成物に手を入れていたなら、新しい生成物にその編集を移す必要がある。
+
+`--only` が無い CLI(1.8.0 以前)では、古いと言われたスキルの SKILL.md だけを
+消して `claude init` を通常実行する(`claude init` は無いファイルだけを書く)。
 
 ```bash
 git rm .claude/skills/utakata-impl-flow/SKILL.md     # doctor が名指ししたものだけ
 utakata claude init
-git diff --stat                                      # そのスキルだけが変わっていること
-utakata doctor                                       # 指摘が消えていること
 ```
-
-スキルを**人が編集していた**場合は、消す前に差分を確認してユーザーに聞く。
-生成物に手を入れていたなら、新しい生成物にその編集を移す必要がある。
 
 ここでコミットする(`chore: utakata <version> に合わせて生成済みスキルを更新`)。
 
@@ -82,7 +89,8 @@ utakata doctor                                       # 指摘が消えている�
 
 ## やってはいけないこと
 
-- `utakata claude init --force`(settings.json と CLAUDE.md が消える)
+- `utakata claude init --force`(settings.json と CLAUDE.md が消える)。
+  再生成は `--only skills` のように対象を絞る
 - doctor が名指ししていないスキルを消す
 - 人が編集した生成物を、確認せずに捨てる
 - `impl revise` を代行する(計画を変えた理由は人が書く)

@@ -163,7 +163,7 @@ utakata impl new docs:readme
 
 ```sh
 # 作成
-utakata impl new [kind:]<target> [--agreement AGR-003] [--spec <path>] [--basis client_agreed] [--supersedes PLAN-0001]
+utakata impl new [kind:]<target> [--agreement AGR-0003] [--spec <path>] [--message MSGR-20260811-001] [--basis client_agreed] [--backlog <項目>] [--supersedes PLAN-0001]
 
 # 記録・改訂
 utakata impl note <ID> "本文"             # 実施記録を 1 件追記(stdin 可)
@@ -257,7 +257,7 @@ kind: feat                 # feat | fix | refactor | docs | chore | test(v1.8.0)
 status: in_progress
 created: 2026-08-11
 origin:                    # 根拠へのリンク
-  agreements: [AGR-003]
+  agreements: [AGR-0003]
   specs: []
   messages: [MSGR-20260811-001]
 basis: client_agreed       # client_agreed | developer_judgment

@@ -463,6 +463,30 @@ class EnMessages implements CliMessages {
   @override
   String agreeStatusDone(String id, String status) => '✅ Updated $id to $status';
 
+  // ─── Agreement ID checks and read warnings (v1.8.1, #33) ───
+  @override
+  String agreementIdInvalid(String quotedId) =>
+      'Invalid agreement ID: $quotedId (pass one ID like AGR-0001). Nothing was recorded.';
+  @override
+  String agreementNotFound(String quotedId) =>
+      'Agreement $quotedId is not recorded (check with utakata agree list). Nothing was recorded.';
+  @override
+  String agreementSkippedUnparsable(int line) =>
+      'Skipped agreements.jsonl line $line: not valid JSON (saved to agreements.jsonl.corrupt)';
+  @override
+  String agreementSkippedInvalid(int line) =>
+      'Skipped agreements.jsonl line $line: not a valid agreement event';
+  @override
+  String agreementSkippedMissingAdd(String quotedId) =>
+      'Skipped $quotedId: no add event (e.g. a status change or reflect on a non-existent ID)';
+  @override
+  String agreementSkippedSummary(int count) =>
+      'Skipped $count unreadable agreement record(s). Check agreements.jsonl (it is append-only; decide by hand whether to fix it)';
+  @override
+  String doctorAgreementsSkipped(int count, String sample) =>
+      'doc/records/agreements.jsonl has $count unreadable record(s) ($sample). '
+      'Run `utakata agree list` for details.';
+
   // ─── impl (v0.9) ───
   @override
   String get cmdImplDesc => 'Feature implementation plan management';
@@ -587,6 +611,21 @@ class EnMessages implements CliMessages {
   String get optImplSupersedes =>
       'ID of the older plan this one replaces (e.g. PLAN-0001)';
   @override
+  String get optImplAgreement =>
+      'Agreement IDs this plan is based on, comma-separated (e.g. AGR-0003)';
+  @override
+  String get optImplSpec =>
+      'Spec file paths this plan is based on, comma-separated';
+  @override
+  String get optImplMessage =>
+      'Message IDs this plan is based on, comma-separated '
+      '(e.g. MSGR-20260811-001)';
+  @override
+  String get optImplBasis =>
+      'Whether the plan was agreed with the client or is your own judgment';
+  @override
+  String get optImplBacklog => 'Backlog item this plan belongs to (free text)';
+  @override
   String get implNoteTextRequired =>
       'Specify the note text: utakata impl note <ID> "text" (or via stdin)';
   @override
@@ -606,7 +645,8 @@ class EnMessages implements CliMessages {
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md is from an older version '
       '(claude init never overwrites existing files). '
-      'Regenerate it with `utakata claude init --force`.';
+      'Regenerate it with `utakata claude init --only skills` '
+      '(not --force, which also overwrites settings.json and CLAUDE.md).';
 
 
   // ─── summary (v0.9) ───
@@ -653,7 +693,8 @@ class EnMessages implements CliMessages {
   @override
   String get cmdClaudeInitDesc =>
       'Write .claude/ (skills, agent, settings) + .mcp.json + CLAUDE.md. '
-      'Default repairs missing files only (existing ones are protected); --force regenerates';
+      'Default repairs missing files only (existing ones are protected); '
+      '--only regenerates the chosen targets, --force regenerates everything';
   @override
   String get cmdSkillsDesc => 'Sync architecture-bundled SKILLs into .claude/skills/';
   @override
@@ -701,7 +742,22 @@ class EnMessages implements CliMessages {
   String get optForceOverwrite =>
       'Also overwrite human-edited managed files (unmanaged files are never touched)';
   @override
-  String get optForceRegenerate => 'Overwrite existing files (including CLAUDE.md)';
+  String get optForceRegenerate =>
+      'Regenerate existing files too. .claude/settings.json and CLAUDE.md are '
+      'overwritten as whole files (hand-added settings and text are lost). '
+      '.mcp.json only gets the utakata entry added/replaced; other servers are kept. '
+      'Use --only to regenerate just some targets';
+  @override
+  String get optClaudeOnly =>
+      'Regenerate only the given targets, overwriting existing files '
+      '(repeatable: --only skills,agents). '
+      'skills = .claude/skills/utakata-*, agents = .claude/agents/, '
+      'mcp = .mcp.json (only the utakata entry is added/replaced), '
+      'settings = .claude/settings.json (overwritten), claude-md = CLAUDE.md (overwritten)';
+  @override
+  String claudeInitInvalidJson(String path) =>
+      '$path was not written: it is not valid JSON '
+      '(or mcpServers is not an object). Fix it and run again.';
   @override
   String get optUpdateRef => 'Re-resolve the ref and update';
   @override

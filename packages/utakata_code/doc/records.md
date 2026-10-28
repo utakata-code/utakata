@@ -48,7 +48,7 @@ utakata message show MSGR-20260811-001
 utakata message render          # doc/preview/messages/YYYY-MM.md を再生成
 
 # 後から要約ログ・合意に紐付ける(本文には触れない)
-utakata message link MSGR-20260811-001 --log MSG-20260811-003 --agreement AGR-003
+utakata message link MSGR-20260811-001 --log MSG-20260811-003 --agreement AGR-0003
 ```
 
 | オプション | 説明 |
@@ -136,8 +136,16 @@ env として渡すので、エージェントの記録は `recorded_by: agent:c
 `records.agent_write` を変えたら:
 
 ```sh
-utakata claude init --force
+utakata claude init --only settings
 ```
+
+`--only settings` は `.claude/settings.json` だけをファイルごと作り直します
+(手で足した hooks・permissions は消えるので、先に差分を控えてください)。
+`--force` は `CLAUDE.md` も上書きするので、ここでは使いません。
+
+生成された `CLAUDE.md` の記録についての一文も `agent_write` に連動します。
+`CLAUDE.md` に手を入れていなければ `--only settings,claude-md` で両方を
+作り直せます。手を入れているなら、該当の一文だけを手で直してください。
 
 設定と実ファイルが食い違っている場合は `utakata doctor` が検出して案内します。
 

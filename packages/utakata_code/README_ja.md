@@ -131,7 +131,7 @@ features:
 | `utakata message list\|show\|render\|link` | 一覧 / 全文表示 / `doc/preview/messages/` の再生成 / 要約ログ・合意への紐付け |
 | `utakata agree add --title "..." --kind client_agreement\|internal_decision\|tentative [--amount] [--from <msg id>]` | 合意を記録する(`doc/records/agreements.jsonl`・追記専用) |
 | `utakata agree status <id> <status>` / `correct <id>` / `reflect <id> --plan\|--spec` / `list [--unreflected]` | 合意の状態更新・訂正(supersede)・反映記録・未反映合意の一覧 |
-| `utakata impl new [kind:]<target> [--agreement] [--spec] [--basis] [--supersedes]` | 実装計画を作成する(`doc/impl/1_todo/PLAN-NNNN_{feature}.md`)。`kind` は `feat`(既定)/`fix`/`refactor`/`docs`/`chore`/`test`。`--supersedes` で旧計画を置き換える |
+| `utakata impl new [kind:]<target> [--agreement] [--spec] [--message] [--basis] [--backlog] [--supersedes]` | 実装計画を作成する(`doc/impl/1_todo/PLAN-NNNN_{feature}.md`)。`kind` は `feat`(既定)/`fix`/`refactor`/`docs`/`chore`/`test`。`--supersedes` で旧計画を置き換える |
 | `utakata impl note <id> "本文"` / `revise <id> --reason` | 実施記録を追記(stdin 可)/ 凍結後に書き換えた計画を改訂として受理 |
 | `utakata impl start\|review\|done\|archive <id>` | 実装軸を進める。ファイルは対応するレーンへ移動する |
 | `utakata impl test start\|review\|done\|todo\|skip <id>` | 検証軸を進める(実装が `done` になってから。`skip --reason` はテスト不要の明示) |
@@ -152,7 +152,7 @@ features:
 | `utakata mcp` | ステートレス・読み取り専用の MCP サーバーを stdio で起動する(`structure_get`・`check_run`・`plan_get`・`log_query`・`agreements_query`・`guide_get`・`guide_for_file`・`config_get`・`doc_get`・`vault_list`・`vault_get`、および `records.agent_read.messages` 有効時のみ `message_query`) |
 | `utakata vault list\|show\|get` | クライアント説明用の実務ナレッジ Vault を参照する(`vault:` で設定。通常は `~/.utakata/config.yaml`) |
 | `utakata skills sync [--force]` | `utakata.yaml` の `skills` リストをアーキテクチャ同梱 SKILL から `.claude/skills/` に同期する(managed マーカー保護: 人間の作ったファイルは絶対に上書きしない) |
-| `utakata claude init [--force]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成、`--force` で全再生成 |
+| `utakata claude init [--only <対象>] [--force]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成。`--only skills` のように対象(`skills` / `agents` / `mcp` / `settings` / `claude-md`、複数可)を選ぶとそれだけを上書きで再生成。`--force` は全再生成で、`settings.json` と `CLAUDE.md` はファイルごと上書きされる。`.mcp.json` はどのモードでも `mcpServers.utakata` だけを追加・置換し、他のサーバーは残す |
 
 `diff` は `check` への永続的なエイリアスとして残ります。`scan`・`validate`・`feature init`・`core`・`arch create` は削除・改名されました。詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 

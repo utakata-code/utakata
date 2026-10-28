@@ -10,6 +10,7 @@ import '../../1_domain/services/actor_resolver.dart';
 import '../../1_domain/services/case_converter.dart';
 import '../../1_domain/services/impl_lane.dart';
 import '../3_presenters/impl_board_presenter.dart';
+import 'agreement_cli_support.dart';
 import 'base_command.dart';
 import 'logger.dart';
 
@@ -120,14 +121,18 @@ class _ImplNewCommand extends BaseCommand {
   String get name => 'new';
   @override
   String get description => _msg.cmdImplNewDesc;
+  @override
+  String get invocation => 'utakata impl new [kind:]<target> [options]';
 
   _ImplNewCommand(this._usecase, this._msg, this._writeFile) {
     argParser
-      ..addOption('backlog', defaultsTo: '')
-      ..addOption('agreement') // カンマ区切り
-      ..addOption('spec')
-      ..addOption('message')
-      ..addOption('basis', allowed: ['client_agreed', 'developer_judgment'])
+      ..addOption('backlog', help: _msg.optImplBacklog)
+      ..addOption('agreement', help: _msg.optImplAgreement) // カンマ区切り
+      ..addOption('spec', help: _msg.optImplSpec)
+      ..addOption('message', help: _msg.optImplMessage)
+      ..addOption('basis',
+          help: _msg.optImplBasis,
+          allowed: ['client_agreed', 'developer_judgment'])
       ..addOption('supersedes', help: _msg.optImplSupersedes);
   }
 
@@ -145,23 +150,31 @@ class _ImplNewCommand extends BaseCommand {
     final basisRaw = argResults!['basis'] as String?;
     final projectDir = Directory.current.path;
 
-    final id = await _usecase.create(
-      projectDir,
-      feature: feature,
-      kind: spec.kind,
-      backlog: argResults!['backlog'] as String,
-      agreements: _splitCsv(argResults!['agreement'] as String?),
-      specs: _splitCsv(argResults!['spec'] as String?),
-      messages: _splitCsv(argResults!['message'] as String?),
-      basis: basisRaw == 'client_agreed'
-          ? ImplPlanBasis.clientAgreed
-          : basisRaw == 'developer_judgment'
-              ? ImplPlanBasis.developerJudgment
-              : null,
-      supersedes: argResults!['supersedes'] as String?,
-      now: DateTime.now(),
-      bodyTemplate: _bodyTemplate,
-    );
+    final String id;
+    try {
+      id = await _usecase.create(
+        projectDir,
+        feature: feature,
+        kind: spec.kind,
+        backlog: (argResults!['backlog'] as String?) ?? '',
+        agreements: _splitCsv(argResults!['agreement'] as String?),
+        specs: _splitCsv(argResults!['spec'] as String?),
+        messages: _splitCsv(argResults!['message'] as String?),
+        basis: basisRaw == 'client_agreed'
+            ? ImplPlanBasis.clientAgreed
+            : basisRaw == 'developer_judgment'
+                ? ImplPlanBasis.developerJudgment
+                : null,
+        supersedes: argResults!['supersedes'] as String?,
+        now: DateTime.now(),
+        bodyTemplate: _bodyTemplate,
+      );
+    } on Exception catch (e) {
+      // --agreement の検査で断られた(#33)。何も書いていない
+      final code = reportAgreementIdError(e, _msg);
+      if (code == null) rethrow;
+      return code;
+    }
 
     await _refreshBoard(_usecase, projectDir, _writeFile);
     final created = (await _usecase.find(projectDir, id))!;

@@ -163,7 +163,7 @@ void main() {
       writeConfig('schema: 1\nrecords:\n  agent_write: append\n');
 
       final issues = await buildDoctor().diagnose(dir.path);
-      expect(issues.any((i) => i.contains('claude init --force')), isTrue);
+      expect(issues.any((i) => i.contains('claude init --only settings')), isTrue);
     });
 
     test('一致していれば乖離を報告しない', () async {
@@ -171,7 +171,7 @@ void main() {
       await buildUsecase().execute(dir.path);
 
       final issues = await buildDoctor().diagnose(dir.path);
-      expect(issues.any((i) => i.contains('claude init --force')), isFalse);
+      expect(issues.any((i) => i.contains('claude init --only settings')), isFalse);
     });
 
     test('AI/snapshots/ の残存を案内する', () async {

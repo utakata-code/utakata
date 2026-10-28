@@ -104,12 +104,11 @@ class VaultRepositoryImpl implements VaultRepository {
     final url = ref?.url;
     if (url == null || url.isEmpty) return null;
 
-    final repoDir = Directory(p.join(_cacheDirFor(url), 'repo'));
-    if (repoDir.existsSync()) repoDir.deleteSync(recursive: true);
-    repoDir.parent.createSync(recursive: true);
-
-    await _git.cloneDepth1(url, ref?.ref, repoDir.path);
-    return repoDir.path;
+    // 一時フォルダーに取ってから差し替える。失敗しても前回の取得結果は残る
+    // (Issue #32)。
+    final repoDir = p.join(_cacheDirFor(url), 'repo');
+    await _git.cloneDepth1Replacing(url, ref?.ref, repoDir);
+    return repoDir;
   }
 
   @override

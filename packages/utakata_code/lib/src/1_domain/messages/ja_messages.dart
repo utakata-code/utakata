@@ -447,6 +447,30 @@ class JaMessages implements CliMessages {
   @override
   String agreeStatusDone(String id, String status) => '✅ $id の状態を $status に更新しました';
 
+  // ─── 合意 ID の検査と読み出しの警告 (v1.8.1, #33) ───
+  @override
+  String agreementIdInvalid(String quotedId) =>
+      '合意 ID の形が正しくありません: $quotedId(AGR-0001 の形で1件ずつ指定してください)。何も記録していません。';
+  @override
+  String agreementNotFound(String quotedId) =>
+      '合意 $quotedId は記録されていません(utakata agree list で確認)。何も記録していません。';
+  @override
+  String agreementSkippedUnparsable(int line) =>
+      'agreements.jsonl の $line 行目は JSON として読めないため飛ばしました(agreements.jsonl.corrupt に退避済み)';
+  @override
+  String agreementSkippedInvalid(int line) =>
+      'agreements.jsonl の $line 行目は合意の記録として解釈できないため飛ばしました';
+  @override
+  String agreementSkippedMissingAdd(String quotedId) =>
+      '$quotedId には合意の追加(add)の記録が無いため飛ばしました(存在しない ID への状態変更・反映など)';
+  @override
+  String agreementSkippedSummary(int count) =>
+      '合意の記録のうち $count 件を読めずに飛ばしました。agreements.jsonl を確認してください(追記専用のため、直すかは人間が判断してください)';
+  @override
+  String doctorAgreementsSkipped(int count, String sample) =>
+      'doc/records/agreements.jsonl に読めない記録が $count 件あります($sample)。'
+      '`utakata agree list` で詳細を確認できます。';
+
   // ─── impl (v0.9) ───
   @override
   String get cmdImplDesc => 'feature 実装計画の管理';
@@ -563,6 +587,17 @@ class JaMessages implements CliMessages {
   @override
   String get optImplSupersedes => 'この計画が置き換える旧計画の ID(例: PLAN-0001)';
   @override
+  String get optImplAgreement => '根拠にした合意の ID。カンマ区切り(例: AGR-0003)';
+  @override
+  String get optImplSpec => '根拠にした仕様書のパス。カンマ区切り';
+  @override
+  String get optImplMessage =>
+      '根拠にした送受信原文の ID。カンマ区切り(例: MSGR-20260811-001)';
+  @override
+  String get optImplBasis => '顧客と合意済みか、開発側の判断か';
+  @override
+  String get optImplBacklog => 'この計画が属するバックログ項目(自由記述)';
+  @override
   String get implNoteTextRequired =>
       '記録の本文を指定してください: utakata impl note <ID> "本文"(または stdin)';
   @override
@@ -581,7 +616,8 @@ class JaMessages implements CliMessages {
   String staleGeneratedSkill(String skillId) =>
       '.claude/skills/$skillId/SKILL.md が古いバージョンのままです'
       '(claude init は既存ファイルを上書きしません)。'
-      '`utakata claude init --force` で再生成してください。';
+      '`utakata claude init --only skills` で再生成してください'
+      '(--force は settings.json と CLAUDE.md も上書きするので使わない)。';
 
 
   // ─── summary (v0.9) ───
@@ -627,7 +663,8 @@ class JaMessages implements CliMessages {
   @override
   String get cmdClaudeInitDesc =>
       '.claude/(スキル・エージェント・settings)+ .mcp.json + CLAUDE.md を生成する。'
-      '既定は欠けているファイルのみ補修(既存は保護)。--force で再生成';
+      '既定は欠けているファイルのみ補修(既存は保護)。--only で対象を選んで再生成、'
+      '--force で全て再生成';
   @override
   String get cmdSkillsDesc => 'アーキテクチャ同梱 SKILL を .claude/skills/ へ同期する';
   @override
@@ -672,7 +709,21 @@ class JaMessages implements CliMessages {
   String get optForceOverwrite =>
       '人間が編集した managed ファイルも上書きする(マーカーの無いファイルは対象外)';
   @override
-  String get optForceRegenerate => '既存ファイル(CLAUDE.md 含む)も上書きして再生成する';
+  String get optForceRegenerate =>
+      '既存ファイルも上書きして再生成する。.claude/settings.json と CLAUDE.md は'
+      'ファイルごと上書きされる(手で足した設定・記述は消える)。'
+      '.mcp.json は utakata のエントリだけを追加・置換し、他のサーバーは残す。'
+      '一部だけ再生成するなら --only を使う';
+  @override
+  String get optClaudeOnly =>
+      '指定した対象だけを再生成する(既存も上書き。複数指定可: --only skills,agents)。'
+      'skills = .claude/skills/utakata-*、agents = .claude/agents/、'
+      'mcp = .mcp.json(utakata のエントリだけ追加・置換)、'
+      'settings = .claude/settings.json(上書き)、claude-md = CLAUDE.md(上書き)';
+  @override
+  String claudeInitInvalidJson(String path) =>
+      '$path が JSON として読めない(または mcpServers がオブジェクトでない)ため、'
+      '書き込みませんでした。内容を直してから再実行してください。';
   @override
   String get optUpdateRef => 'ref を再解決して更新する';
   @override

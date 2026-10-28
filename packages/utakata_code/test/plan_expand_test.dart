@@ -116,6 +116,22 @@ void main() {
     expect(planRepo.written, isEmpty);
   });
 
+  test('複数 feature の編集はまとめて 1 回で書き込む(Issue #28)', () async {
+    final planRepo = _RecordingPlanRepo();
+    final usecase = usecaseFor(
+      const PlanIntent(defaultArchitectureId: 'clean_architecture', features: [
+        PlanFeatureIntent(name: 'a', permission: 'user', entities: ['a']),
+        PlanFeatureIntent(name: 'b', permission: 'user', entities: ['b']),
+      ]),
+      planRepo,
+    );
+
+    await usecase.execute('/proj');
+
+    expect(planRepo.batchWrites, 1);
+    expect(planRepo.written.keys, ['a', 'b']);
+  });
+
   test('dry-run では書き込まない', () async {
     final planRepo = _RecordingPlanRepo();
     final usecase = usecaseFor(
@@ -148,6 +164,24 @@ class _RecordingPlanRepo implements PlanRepository {
     written[featureName] = declarations;
     return true;
   }
+
+  /// 1 回の呼び出しでまとめて書かれたか(Issue #28)を確かめるための回数
+  int batchWrites = 0;
+
+  @override
+  Future<List<String>> setLayerDeclarationsForFeatures(
+    String projectDir,
+    Map<String, Map<String, List<String>>> declarationsByFeature,
+  ) async {
+    batchWrites++;
+    written.addAll(declarationsByFeature);
+    return declarationsByFeature.keys.toList();
+  }
+
+  @override
+  Future<bool> appendLayerItems(String projectDir, String featureName,
+          String layerPath, List<String> items) =>
+      throw UnimplementedError();
 
   @override
   Future<void> write(String projectDir, PlanIntent plan) =>

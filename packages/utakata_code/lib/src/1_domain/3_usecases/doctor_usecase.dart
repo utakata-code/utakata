@@ -1,6 +1,8 @@
+import '../1_entities/record/agreement.dart';
 import '../2_repositories/config_repository.dart';
 import '../2_repositories/impl_plan_repository.dart';
 import '../2_repositories/plan_repository.dart';
+import '../exceptions/domain_exceptions.dart';
 import '../messages/cli_messages.dart';
 
 /// 1件の移行操作を表す(dry-run 表示・実行ログ共用)。
@@ -38,6 +40,10 @@ class DoctorUsecase {
 
   /// 凍結後に計画部分が書き換えられたまま受理されていない計画(v1.8.0)。
   final Future<List<String>> Function(String projectDir)? _driftedImplPlans;
+
+  /// 合意台帳で読めずに飛ばした記録(壊れた行・add の無い ID。v1.8.1, #33)。
+  final Future<List<SkippedAgreementRecord>> Function(String projectDir)?
+      _skippedAgreements;
   final CliMessages? _msg;
 
   const DoctorUsecase({
@@ -57,6 +63,8 @@ class DoctorUsecase {
     Future<Set<String>?> Function(String projectDir)? featuresWithImplPlan,
     Future<ImplScanResult> Function(String projectDir)? scanImplPlans,
     Future<List<String>> Function(String projectDir)? driftedImplPlans,
+    Future<List<SkippedAgreementRecord>> Function(String projectDir)?
+        skippedAgreements,
     CliMessages? msg,
   })  : _planRepo = planRepo,
         _configRepo = configRepo,
@@ -72,6 +80,7 @@ class DoctorUsecase {
         _featuresWithImplPlan = featuresWithImplPlan,
         _scanImplPlans = scanImplPlans,
         _driftedImplPlans = driftedImplPlans,
+        _skippedAgreements = skippedAgreements,
         _msg = msg;
 
   /// 診断のみ行う(環境チェック + utakata.yaml スキーマ検証)。
@@ -116,6 +125,21 @@ class DoctorUsecase {
       issues.addAll(await _diagnoseImplPlans(projectDir));
     } catch (_) {
       // 実装計画を読めない場合はその診断だけ諦める
+    }
+    // 合意台帳の壊れた行・add の無い ID は agree list では飛ばして読むため、
+    // 一覧を見ない限り気づけない。ここでも知らせる(#33)
+    final skippedAgreements = _skippedAgreements;
+    final msg = _msg;
+    if (skippedAgreements != null && msg != null) {
+      try {
+        final skipped = await skippedAgreements(projectDir);
+        if (skipped.isNotEmpty) {
+          issues.add(msg.doctorAgreementsSkipped(skipped.length,
+              _sample(skipped.map((r) => r.id != null ? quoteRecordId(r.id!) : 'line ${r.line}'))));
+        }
+      } catch (_) {
+        // 台帳を読めない場合はこの診断だけ諦める
+      }
     }
     try {
       issues.addAll(await _diagnoseRecordsPolicy(projectDir));
@@ -214,7 +238,7 @@ class DoctorUsecase {
     return [
       msg?.staleGeneratedSkill('utakata-impl-flow') ??
           '.claude/skills/utakata-impl-flow/SKILL.md が古いバージョンのままです。'
-              '`utakata claude init --force` で再生成してください。',
+              '`utakata claude init --only skills` で再生成してください。',
     ];
   }
 
@@ -253,7 +277,7 @@ class DoctorUsecase {
     if (denied != expectedDenied || allowsCli != expectedAllowsCli) {
       issues.add('.claude/settings.json が records.agent_write '
           '(${config.recordsAgentWrite})と一致していません。'
-          '`utakata claude init --force` で再生成してください。');
+          '`utakata claude init --only settings` で再生成してください。');
     }
     return issues;
   }

@@ -36,6 +36,16 @@ class _FakePlanRepository implements PlanRepository {
       false;
 
   @override
+  Future<List<String>> setLayerDeclarationsForFeatures(String projectDir,
+          Map<String, Map<String, List<String>>> declarationsByFeature) async =>
+      const [];
+
+  @override
+  Future<bool> appendLayerItems(String projectDir, String featureName,
+          String layerPath, List<String> items) async =>
+      false;
+
+  @override
   Future<bool> removeLayerItem(String projectDir, String featureName,
           String layerPath, String item) async =>
       false;
