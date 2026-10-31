@@ -47,6 +47,8 @@ void main(List<String> args) {
     stderr.writeln('no architectures found under ${archLibDir.path}');
     exit(65);
   }
+  stdout.writeln('next: dart run tool/generate_bundled_assets.dart '
+      '(AOT 用の埋め込み版を更新する)');
 }
 
 /// slim 同梱の対象: このトップレベル配下のみ同梱する。

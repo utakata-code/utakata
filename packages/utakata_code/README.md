@@ -181,6 +181,22 @@ packages/utakata_code/lib/src/
 └── 3_application/     # Command handlers, runner, presenters, MCP server
 ```
 
+### Standalone executable and bundled files
+
+`dart compile exe bin/utakata.dart` produces a single binary. Because a compiled binary cannot locate the package directory, the files it reads at runtime (`lib/src/0_templates/**` and `doc/*.md`) are embedded in `lib/src/bundled_assets.g.dart` and written once to `~/.utakata/cache/bundled-<version>/` on first use.
+
+Bundled files are looked up in this order:
+
+1. `UTAKATA_ASSETS_DIR` — a directory laid out like the package root (`lib/src/0_templates/`, `doc/`)
+2. The package directory (`dart run` / `dart pub global activate`)
+3. The embedded copy above
+
+After changing anything under `lib/src/0_templates/` (including `tool/sync_arch_lib.dart`) or `doc/*.md`, regenerate the embedded copy (a test fails if it is stale):
+
+```sh
+dart run tool/generate_bundled_assets.dart
+```
+
 ---
 
 ## License
