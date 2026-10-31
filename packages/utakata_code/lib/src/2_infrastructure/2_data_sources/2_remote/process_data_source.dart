@@ -3,69 +3,40 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../../1_domain/exceptions/domain_exceptions.dart';
+import 'command_resolver.dart';
 
 /// 外部プロセス実行を担うデータソース
 ///
 /// flutter create / flutter analyze 等を呼び出す。
-/// flutter 実行ファイルのパスは**初回使用時に**遅延解決し、以降はキャッシュする
-/// (plan/check/status --brief 等 flutter を使わないコマンドの起動を妨げない)。
+/// flutter の起動方法は [CommandResolver] が**初回使用時に**遅延解決し、以降は
+/// キャッシュする(plan/check/status --brief 等 flutter を使わないコマンドの
+/// 起動を妨げない)。優先順は [CommandResolver.resolveFlutter] を参照。
 class ProcessDataSource {
-  const ProcessDataSource();
+  final CommandResolver resolver;
 
-  /// 解決済みの flutter 実行ファイルパス(初回アクセス時に解決・キャッシュ)
-  static String? _cachedExe;
+  const ProcessDataSource({this.resolver = const CommandResolver()});
 
-  Future<String> get _flutterExe async {
-    return _cachedExe ??= await _resolveFlutterExecutable();
+  /// 解決済みの flutter 起動方法(resolver ごとに初回アクセス時に解決・キャッシュ)
+  static final _cache = Expando<ResolvedCommand>('flutter');
+
+  Future<ResolvedCommand> get _flutter async {
+    return _cache[resolver] ??= await resolver.resolveFlutter();
   }
 
-  /// flutter 実行ファイルのパスを解決する
+  /// flutter を [args] で起動する。
   ///
-  /// 以下の優先順位で自動解決する:
-  ///   1. 環境変数 FLUTTER_PATH
-  ///   2. 環境変数 FLUTTER_ROOT → {root}/bin/flutter
-  ///   3. which (macOS/Linux) / where (Windows) で PATH 検索
-  ///   4. 見つからなければ [FlutterNotFoundException] をスロー
-  static Future<String> _resolveFlutterExecutable() async {
-    // 1. 環境変数 FLUTTER_PATH（フルパス指定）
-    final envPath = Platform.environment['FLUTTER_PATH'];
-    if (envPath != null && envPath.isNotEmpty && File(envPath).existsSync()) {
-      return envPath;
+  /// UTAKATA_FLUTTER で差し替えた起動方法が失敗したときは、環境変数名を
+  /// 添えた [CommandOverrideFailedException] にする。
+  Future<ProcessResult> _runFlutter(List<String> args,
+      {String? workingDirectory}) async {
+    final command = await _flutter;
+    try {
+      return await command.run(args, workingDirectory: workingDirectory);
+    } on ProcessException catch (e) {
+      final envVar = command.overrideEnvVar;
+      if (envVar == null) rethrow;
+      throw CommandOverrideFailedException(envVar, command.argv, e.message);
     }
-
-    // 2. 環境変数 FLUTTER_ROOT（SDK ルートディレクトリ）
-    final envRoot = Platform.environment['FLUTTER_ROOT'];
-    if (envRoot != null && envRoot.isNotEmpty) {
-      final candidate = p.join(envRoot, 'bin', Platform.isWindows ? 'flutter.bat' : 'flutter');
-      if (File(candidate).existsSync()) return candidate;
-    }
-
-    // 3. PATH 検索（which / where）
-    final result = await Process.run(
-      Platform.isWindows ? 'where' : 'which',
-      ['flutter'],
-    );
-    if (result.exitCode == 0) {
-      final lines = (result.stdout as String)
-          .trim()
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
-      if (lines.isNotEmpty) {
-        if (Platform.isWindows) {
-          final batExe = lines.firstWhere(
-            (l) => l.endsWith('.bat') || l.endsWith('.cmd') || l.endsWith('.exe'),
-            orElse: () => lines.first,
-          );
-          return batExe;
-        } else {
-          return lines.first;
-        }
-      }
-    }
-
-    throw const FlutterNotFoundException();
   }
 
   /// flutter create を実行する
@@ -79,8 +50,7 @@ class ProcessDataSource {
     required String description,
     String? workingDir,
   }) async {
-    final result = await Process.run(
-      await _flutterExe,
+    final result = await _runFlutter(
       [
         'create',
         '--empty',
@@ -91,7 +61,6 @@ class ProcessDataSource {
         appName,
       ],
       workingDirectory: workingDir,
-      runInShell: Platform.isWindows,
     );
 
     stdout.write(result.stdout);
@@ -112,11 +81,9 @@ class ProcessDataSource {
     final targetDir = workingDir ?? p.join(Directory.current.path, appName);
 
     // 依存関係を解決するために flutter pub get を実行
-    final getResult = await Process.run(
-      await _flutterExe,
+    final getResult = await _runFlutter(
       ['pub', 'get'],
       workingDirectory: targetDir,
-      runInShell: Platform.isWindows,
     );
     stdout.write(getResult.stdout);
     if (getResult.exitCode != 0) {
@@ -124,8 +91,7 @@ class ProcessDataSource {
       return false;
     }
 
-    final result = await Process.run(
-      await _flutterExe,
+    final result = await _runFlutter(
       [
         'pub',
         'run',
@@ -134,7 +100,6 @@ class ProcessDataSource {
         '--delete-conflicting-outputs',
       ],
       workingDirectory: targetDir,
-      runInShell: Platform.isWindows,
     );
 
     stdout.write(result.stdout);
@@ -153,21 +118,17 @@ class ProcessDataSource {
     if (Directory(p.join(projectDir, 'test')).existsSync()) {
       targets.add('test');
     }
-    final result = await Process.run(
-      await _flutterExe,
+    final result = await _runFlutter(
       ['analyze', ...targets],
       workingDirectory: projectDir,
-      runInShell: Platform.isWindows,
     );
     return result.stdout as String;
   }
 
   /// flutter --version を実行してバージョン文字列を返す
   Future<String> flutterVersion() async {
-    final result = await Process.run(
-      await _flutterExe,
+    final result = await _runFlutter(
       ['--version', '--machine'],
-      runInShell: Platform.isWindows,
     );
     return result.stdout as String;
   }

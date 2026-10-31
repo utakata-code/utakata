@@ -34,6 +34,18 @@ dart pub global activate utakata
 
 Make sure `$HOME/.pub-cache/bin` is added to your `PATH`.
 
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `UTAKATA_FLUTTER` | The command line that starts flutter, as space-separated words. Takes precedence over everything below. Run directly without a shell: `Process.run(word1, [word2…, <flutter args>])`. Use it when the `flutter` script cannot be executed directly (e.g. no execute bit on Android): `UTAKATA_FLUTTER="/system/bin/sh /data/…/flutter/bin/flutter"` |
+| `FLUTTER_PATH` | Full path to the `flutter` executable |
+| `FLUTTER_ROOT` | Flutter SDK root (`{root}/bin/flutter` is used) |
+| `UTAKATA_GIT` | The command line that starts git (same format as `UTAKATA_FLUTTER`). Only `arch get` / `vault get` use git |
+| `UTAKATA_LANG` | CLI message language (`ja` / `en`; inferred from `LANG` when unset) |
+
+flutter is looked up in the order `UTAKATA_FLUTTER` → `FLUTTER_PATH` → `FLUTTER_ROOT` → `PATH` (`which` / `where`). In `UTAKATA_FLUTTER` / `UTAKATA_GIT`, quote words that contain spaces with `'...'` or `"..."`, or escape a space with `\`; there is no variable expansion. Because `\` is an escape character, quote Windows paths with single quotes (`'C:\flutter\bin\flutter.bat'`). An unterminated quote is an error.
+
 ---
 
 ## Quick Start
@@ -100,14 +112,14 @@ features:
 |---|---|
 | `utakata doc init` | Create the `doc/` workspace (specs/records/preview/impl/knowledge/archive) + `utakata.yaml`, ahead of the Flutter project itself |
 | `utakata doc show <config\|plan\|imports\|records\|impl>` / `utakata doc list` | Print the bundled reference for `utakata.yaml` / `doc/specs/plan.yaml` / `import_rules` / records policy (matches the installed version; also available as the MCP `doc_get` tool) |
-| `utakata create <name> [--org] [--platforms] [--arch]` | Create a new Flutter project with the chosen architecture, plus `.mcp.json` + `.claude/` |
+| `utakata create <name> [--org] [--platforms] [--arch] [--mcp ...]` | Create a new Flutter project with the chosen architecture, plus `.mcp.json` + `.claude/`. Takes the same `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` as `claude init` (see [MCP destination](#mcp-destination)) |
 | `utakata doctor [--migrate]` | Diagnose the project; `--migrate` moves a legacy `AI/`-based layout (or an ad-hoc `doc/`) to the current one |
 
 ### Structure
 
 | Command | Description |
 |---|---|
-| `utakata feature add <name> [--entity] [--permission] [--template <id>]` | Scaffold one feature. `--template` applies a feature preset (`manifest.yaml` resolved from the project or `~/.utakata/feature_templates/`) and registers it in `plan.yaml` in the same step |
+| `utakata feature add <name> [--entity] [--permission] [--arch] [--template <id>]` | Scaffold one feature. When `doc/specs/plan.yaml` exists, it also registers the feature there (`name` / `permission` / `entities`; `architecture` only with an explicit `--arch`; skipped if a feature of the same name is already planned) and creates the empty required files like `apply`, so `check` passes right away. Without `plan.yaml` it only creates the folders, as before (no `plan.yaml` is created). `--template` applies a feature preset (`manifest.yaml` resolved from the project or `~/.utakata/feature_templates/`) registers it in `plan.yaml` and creates its required files in the same step |
 | `utakata apply [--scope all\|feature\|core] [--dry-run]` | Generate whatever `plan.yaml` declares but `lib/` is missing |
 | `utakata plan adopt [-y]` | Detect features present in `lib/features/` but absent from `plan.yaml`, and append them (keeps existing comments/formatting) |
 | `utakata plan expand [--dry-run] [--feature <name>]` | Materialize the auto-derived per-layer file lists into `plan.yaml`, so you can then edit them by hand |
@@ -151,7 +163,7 @@ features:
 | `utakata mcp` | Start a stateless, read-only MCP server over stdio (`structure_get`, `check_run`, `plan_get`, `log_query`, `agreements_query`, `guide_get`, `guide_for_file`, `config_get`, `doc_get`, `vault_list`, `vault_get`, plus `message_query` when `records.agent_read.messages` is enabled) |
 | `utakata vault list\|show\|get` | Browse the personal knowledge vault used to write client-facing explanations (configured via `vault:`, usually in `~/.utakata/config.yaml`) |
 | `utakata skills sync [--force]` | Sync the architecture's bundled SKILLs listed in `utakata.yaml` into `.claude/skills/` (managed-marker protection: human files are never overwritten) |
-| `utakata claude init [--only <target>] [--force]` | Add or repair the Claude Code integration (`.claude/` + `.mcp.json` + `CLAUDE.md`) in an existing project. Default writes missing files only. `--only skills` (targets: `skills` / `agents` / `mcp` / `settings` / `claude-md`, repeatable) regenerates just those, overwriting them. `--force` regenerates everything; `settings.json` and `CLAUDE.md` are overwritten as whole files. `.mcp.json` only ever gets `mcpServers.utakata` added/replaced; other servers are kept |
+| `utakata claude init [--only <target>] [--force] [--mcp ...]` | Add or repair the Claude Code integration (`.claude/` + `.mcp.json` + `CLAUDE.md`) in an existing project. Default writes missing files only. `--only skills` (targets: `skills` / `agents` / `mcp` / `settings` / `claude-md`, repeatable) regenerates just those, overwriting them. `--force` regenerates everything; `settings.json` and `CLAUDE.md` are overwritten as whole files. `.mcp.json` only ever gets `mcpServers.utakata` (or the `--mcp-name` key) added/replaced; other servers are kept. `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` choose what that entry points to (see [MCP destination](#mcp-destination)) |
 
 `diff` remains as a permanent alias for `check`. `scan`, `validate`, `feature init`, `core`, and `arch create` have been removed/renamed — see [CHANGELOG.md](CHANGELOG.md).
 
@@ -167,6 +179,41 @@ features:
 
 Prefer the `utakata` CLI to extend project structure rather than creating files by hand, and run `utakata check` before committing.
 
+### MCP destination
+
+By default `.mcp.json` launches `utakata mcp` over stdio. When the MCP server is provided elsewhere (e.g. an IDE that serves MCP over HTTP) or `utakata` is not on `PATH` for the MCP client, choose the destination with flags on `claude init` / `create`:
+
+| Option | Meaning |
+|---|---|
+| `--mcp=stdio\|http\|none` | `stdio` (default) = `{"command": "utakata", "args": ["mcp"]}`. `http` = `{"type": "http", "url": ..., "headers": {...}}`. `none` = never touch `.mcp.json` (`--only mcp` then does nothing) |
+| `--mcp-url <url>` | URL for `http` (required). Giving `--mcp-url` alone implies `--mcp=http`. Written verbatim, so `${VAR}` is left for Claude Code to expand from the environment |
+| `--mcp-header 'Name: value'` | Header for `http` (repeatable). Split at the first `:` and trimmed. `headers` is omitted when none are given |
+| `--mcp-name <name>` | Key under `mcpServers` that utakata adds/replaces (default `utakata`). Other servers are kept |
+
+Contradicting combinations (`--mcp=http` without a URL, `--mcp-url` / `--mcp-header` with `stdio` / `none`, `--mcp-name` with `none`, a header without `:`) exit with 64 and write nothing.
+
+```bash
+# Point Claude Code at an IDE's HTTP MCP server; ${...} is expanded by Claude Code
+utakata claude init --only mcp \
+  --mcp-url '${MIDE_MCP_URL}' \
+  --mcp-header 'Authorization: Bearer ${MIDE_MCP_TOKEN}' \
+  --mcp-name mobile-ide
+```
+
+```json
+{
+  "mcpServers": {
+    "mobile-ide": {
+      "type": "http",
+      "url": "${MIDE_MCP_URL}",
+      "headers": { "Authorization": "Bearer ${MIDE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+These flags only change `.mcp.json`. The hooks in `.claude/settings.json` and the skills still call the `utakata` CLI (the MCP server is read-only; writes such as `impl new` / `log add` / `apply` need the CLI), so keep `utakata` available to the hooks even with `http` / `none`. The choice is not saved anywhere: when you regenerate `.mcp.json` later (`--force` / `--only mcp`), pass the same flags again, otherwise the default `mcpServers.utakata` stdio entry is added.
+
 ---
 
 ## Architecture
@@ -179,6 +226,22 @@ packages/utakata_code/lib/src/
 ├── 1_domain/          # Entities, repository interfaces, use cases, pure services
 ├── 2_infrastructure/  # Filesystem/YAML/JSONL/process data sources, models, repository impls
 └── 3_application/     # Command handlers, runner, presenters, MCP server
+```
+
+### Standalone executable and bundled files
+
+`dart compile exe bin/utakata.dart` produces a single binary. Because a compiled binary cannot locate the package directory, the files it reads at runtime (`lib/src/0_templates/**` and `doc/*.md`) are embedded in `lib/src/bundled_assets.g.dart` and written once to `~/.utakata/cache/bundled-<version>/` on first use.
+
+Bundled files are looked up in this order:
+
+1. `UTAKATA_ASSETS_DIR` — a directory laid out like the package root (`lib/src/0_templates/`, `doc/`)
+2. The package directory (`dart run` / `dart pub global activate`)
+3. The embedded copy above
+
+After changing anything under `lib/src/0_templates/` (including `tool/sync_arch_lib.dart`) or `doc/*.md`, regenerate the embedded copy (a test fails if it is stale):
+
+```sh
+dart run tool/generate_bundled_assets.dart
 ```
 
 ---

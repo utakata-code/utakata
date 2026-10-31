@@ -286,6 +286,155 @@ team:
     });
   });
 
+  group('MCP の行き先を選べる(#35)', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('claude_mcp_dest'));
+    tearDown(() => dir.deleteSync(recursive: true));
+    String mcpPath() => '${dir.path}/.mcp.json';
+    Map<String, dynamic> servers() =>
+        (jsonDecode(File(mcpPath()).readAsStringSync())
+            as Map<String, dynamic>)['mcpServers'] as Map<String, dynamic>;
+
+    test('既定(stdio・utakata)は 1.8 系と同じ文字列を書く', () async {
+      await _buildUsecase().execute(dir.path);
+      final defaultContent = File(mcpPath()).readAsStringSync();
+      File(mcpPath()).deleteSync();
+
+      await _buildUsecase()
+          .execute(dir.path, mcp: McpDestination.parse(transport: 'stdio'));
+      expect(File(mcpPath()).readAsStringSync(), defaultContent);
+      expect(defaultContent, '''
+{
+  "mcpServers": {
+    "utakata": {
+      "command": "utakata",
+      "args": ["mcp"]
+    }
+  }
+}
+''');
+      expect(McpDestination.parse().isDefault, isTrue);
+    });
+
+    test('http はヘッダー付きで書き、\${VAR} は展開しない', () async {
+      final mcp = McpDestination.parse(
+        url: r'${MIDE_MCP_URL}',
+        headers: [r'Authorization: Bearer ${MIDE_MCP_TOKEN}', 'X-A:  b:c '],
+        name: 'mobile-ide',
+      );
+      expect(mcp.transport, McpTransport.http);
+
+      final result = await _buildUsecase().execute(dir.path, mcp: mcp);
+      expect(result.written, contains('.mcp.json'));
+      expect(servers(), {
+        'mobile-ide': {
+          'type': 'http',
+          'url': r'${MIDE_MCP_URL}',
+          'headers': {
+            'Authorization': r'Bearer ${MIDE_MCP_TOKEN}',
+            'X-A': 'b:c',
+          },
+        },
+      });
+      expect(File(mcpPath()).readAsStringSync(), contains(r'${MIDE_MCP_TOKEN}'));
+    });
+
+    test('http でヘッダーが無ければ headers を書かない', () async {
+      await _buildUsecase().execute(dir.path,
+          mcp: McpDestination.parse(
+              transport: 'http', url: 'http://127.0.0.1:8765/mcp'));
+      expect(servers()['utakata'],
+          {'type': 'http', 'url': 'http://127.0.0.1:8765/mcp'});
+    });
+
+    test('none は既存の .mcp.json に触れず、無ければ作らない', () async {
+      const original = '{"mcpServers": {"a": {"command": "a"}}}';
+      File(mcpPath()).writeAsStringSync(original);
+      final none = McpDestination.parse(transport: 'none');
+
+      final forced = await _buildUsecase().execute(dir.path, mcp: none);
+      expect(forced.written, isNot(contains('.mcp.json')));
+      expect(forced.written, contains('.claude/settings.json'));
+      final onlyMcp = await _buildUsecase().execute(dir.path,
+          only: {ClaudeIntegrationTarget.mcp}, mcp: none);
+      expect(onlyMcp.written, isEmpty);
+      expect(File(mcpPath()).readAsStringSync(), original);
+
+      File(mcpPath()).deleteSync();
+      await _buildUsecase().execute(dir.path, mcp: none);
+      expect(File(mcpPath()).existsSync(), isFalse);
+    });
+
+    test('--mcp-name のキーだけを追加・置換し、他のサーバーは残す', () async {
+      File(mcpPath()).writeAsStringSync('''
+{"mcpServers": {
+  "utakata": {"command": "utakata", "args": ["mcp"]},
+  "mobile-ide": {"type": "http", "url": "http://old"},
+  "other": {"command": "other"}
+}}''');
+      final mcp = McpDestination.parse(
+          url: r'${MIDE_MCP_URL}', name: 'mobile-ide');
+      await _buildUsecase().execute(dir.path, mcp: mcp);
+      final s = servers();
+      expect(s['mobile-ide'], {'type': 'http', 'url': r'${MIDE_MCP_URL}'});
+      expect(s['utakata'], {'command': 'utakata', 'args': ['mcp']});
+      expect(s['other'], {'command': 'other'});
+
+      // 同じ定義なら触れない
+      final before = File(mcpPath()).readAsStringSync();
+      final again = await _buildUsecase()
+          .execute(dir.path, only: {ClaudeIntegrationTarget.mcp}, mcp: mcp);
+      expect(again.written, isEmpty);
+      expect(File(mcpPath()).readAsStringSync(), before);
+    });
+
+    test('stdio でも --mcp-name を変えられる', () async {
+      await _buildUsecase()
+          .execute(dir.path, mcp: McpDestination.parse(name: 'utakata-cli'));
+      expect(servers(), {
+        'utakata-cli': {'command': 'utakata', 'args': ['mcp']},
+      });
+    });
+
+    group('矛盾する組み合わせは McpOptionException', () {
+      void expectError(McpOptionError error, McpDestination Function() build) {
+        expect(build,
+            throwsA(isA<McpOptionException>().having((e) => e.error, 'error', error)));
+      }
+
+      test('http に url が無い', () {
+        expectError(McpOptionError.urlRequired,
+            () => McpDestination.parse(transport: 'http'));
+        expectError(McpOptionError.urlRequired,
+            () => McpDestination.parse(transport: 'http', url: ' '));
+      });
+      test('url を stdio / none と一緒に指定', () {
+        expectError(McpOptionError.urlNeedsHttp,
+            () => McpDestination.parse(transport: 'stdio', url: 'http://x'));
+        expectError(McpOptionError.urlNeedsHttp,
+            () => McpDestination.parse(transport: 'none', url: 'http://x'));
+      });
+      test('header を http 以外で指定', () {
+        expectError(McpOptionError.headerNeedsHttp,
+            () => McpDestination.parse(headers: ['A: b']));
+        expectError(McpOptionError.headerNeedsHttp,
+            () => McpDestination.parse(transport: 'none', headers: ['A: b']));
+      });
+      test('header の形が不正', () {
+        expectError(McpOptionError.headerInvalid,
+            () => McpDestination.parse(url: 'http://x', headers: ['NoColon']));
+        expectError(McpOptionError.headerInvalid,
+            () => McpDestination.parse(url: 'http://x', headers: [': v']));
+      });
+      test('name を none と一緒に指定・空の name', () {
+        expectError(McpOptionError.nameWithNone,
+            () => McpDestination.parse(transport: 'none', name: 'x'));
+        expectError(
+            McpOptionError.nameEmpty, () => McpDestination.parse(name: ' '));
+      });
+    });
+  });
+
   test('writes a generic CLAUDE.md without utakata.yaml, and never overwrites', () async {
     final dir = Directory.systemTemp.createTempSync('claude_integration_test');
     addTearDown(() => dir.deleteSync(recursive: true));

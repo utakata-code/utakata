@@ -10,6 +10,7 @@ import 'package:utakata/src/1_domain/3_usecases/architecture_resolver.dart';
 import 'package:utakata/src/1_domain/3_usecases/audit_imports_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/check_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/create_project_usecase.dart';
+import 'package:utakata/src/1_domain/3_usecases/create_required_files_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/doctor_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/generate_claude_integration_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/generate_core_usecase.dart';
@@ -23,6 +24,7 @@ import 'package:utakata/src/1_domain/3_usecases/list_agreements_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/query_log_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/record_agreement_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/record_message_usecase.dart';
+import 'package:utakata/src/1_domain/3_usecases/register_feature_in_plan_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/render_log_preview_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/render_messages_usecase.dart';
 import 'package:utakata/src/1_domain/3_usecases/render_summary_usecase.dart';
@@ -343,10 +345,19 @@ Future<void> main(List<String> arguments) async {
     configRepo: configRepo,
   );
 
+  final registerFeatureInPlanUsecase = RegisterFeatureInPlanUsecase(
+    planRepo: planRepo,
+    requiredFiles: CreateRequiredFilesUsecase(
+      archRepo: archRepo,
+      fileExists: fs.entityExists,
+      writeFile: fs.writeFile,
+    ),
+  );
+
   final applyFeatureTemplateUsecase = ApplyFeatureTemplateUsecase(
     templateRepo: featureTemplateRepo,
-    planRepo: planRepo,
     addFeatureUsecase: addFeatureUsecase,
+    registerUsecase: registerFeatureInPlanUsecase,
     msg: msg,
   );
 
@@ -399,7 +410,9 @@ Future<void> main(List<String> arguments) async {
     msg: msg,
     createCommand: CreateCommand(createProjectUsecase, generateClaudeIntegrationUsecase, msg),
     featureCommand: FeatureCommand(addFeatureUsecase, applyFeatureTemplateUsecase, msg,
-        archResolver: archResolver, featuresWithPlan: featuresWithImplPlan),
+        archResolver: archResolver,
+        registerUsecase: registerFeatureInPlanUsecase,
+        featuresWithPlan: featuresWithImplPlan),
     planCommand: PlanCommand(adoptPlanUsecase, msg,
         expandUsecase: expandPlanUsecase, planRepo: planRepo),
     diffCommand: DiffCommand(checkUsecase, msg),

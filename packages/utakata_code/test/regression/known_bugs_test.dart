@@ -28,7 +28,10 @@ class _FakePlanRepository implements PlanRepository {
   Future<void> write(String projectDir, PlanIntent plan) async {}
 
   @override
-  Future<void> adoptFeature(String projectDir, PlanFeatureIntent feature) async {}
+  Future<AdoptFeatureResult> adoptFeature(
+          String projectDir, PlanFeatureIntent feature,
+          {bool createIfMissing = true}) async =>
+      AdoptFeatureResult.added;
 
   @override
   Future<bool> setLayerDeclarations(String projectDir, String featureName,

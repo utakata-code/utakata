@@ -33,6 +33,162 @@ enum ClaudeIntegrationTarget {
   }
 }
 
+/// `.mcp.json` に書く MCP サーバーの行き先(`--mcp`、#35)。
+enum McpTransport {
+  /// `utakata mcp` を stdio で起動する(既定。1.8 系と同じ)。
+  stdio('stdio'),
+
+  /// HTTP の MCP サーバー(IDE が出すもの等)を指す。
+  http('http'),
+
+  /// `.mcp.json` に触れない。
+  none('none');
+
+  final String cliName;
+  const McpTransport(this.cliName);
+
+  static McpTransport? fromCliName(String name) {
+    for (final transport in values) {
+      if (transport.cliName == name) return transport;
+    }
+    return null;
+  }
+}
+
+/// `--mcp*` の組み合わせが不正な理由。
+enum McpOptionError {
+  /// `--mcp=http` なのに `--mcp-url` が無い。
+  urlRequired,
+
+  /// `--mcp-url` を http 以外と一緒に指定した。
+  urlNeedsHttp,
+
+  /// `--mcp-header` を http 以外と一緒に指定した。
+  headerNeedsHttp,
+
+  /// `--mcp-header` が `Name: value` の形でない。
+  headerInvalid,
+
+  /// `--mcp-name` を `--mcp=none` と一緒に指定した。
+  nameWithNone,
+
+  /// `--mcp-name` が空。
+  nameEmpty,
+}
+
+/// [McpDestination.parse] が投げる、オプションの組み合わせの誤り。
+class McpOptionException implements Exception {
+  final McpOptionError error;
+
+  /// 誤りの元になった値(`headerInvalid` のときのヘッダー等)。
+  final String? detail;
+
+  const McpOptionException(this.error, [this.detail]);
+
+  @override
+  String toString() => 'McpOptionException($error, $detail)';
+}
+
+/// `.mcp.json` の `mcpServers.<name>` に utakata が書く定義(#35)。
+///
+/// [url] と [headers] の値はそのまま書く。`${VAR}` は Claude Code が
+/// 読み込み時に環境変数で展開するため、ここでは展開しない。
+class McpDestination {
+  static const defaultName = 'utakata';
+
+  final McpTransport transport;
+
+  /// `mcpServers` のキー。utakata はこのキーだけを追加・置換する。
+  final String name;
+
+  final String? url;
+  final Map<String, String> headers;
+
+  const McpDestination({
+    this.transport = McpTransport.stdio,
+    this.name = defaultName,
+    this.url,
+    this.headers = const {},
+  });
+
+  /// コマンドラインの値から組み立てる。
+  ///
+  /// [transport] は `--mcp` を明示したときだけ渡す(null なら、[url] が
+  /// あれば http、無ければ stdio とみなす)。矛盾する組み合わせは
+  /// [McpOptionException] を投げる。
+  factory McpDestination.parse({
+    String? transport,
+    String? url,
+    List<String> headers = const [],
+    String? name,
+  }) {
+    final resolved = transport != null
+        ? McpTransport.fromCliName(transport) ??
+              (throw ArgumentError.value(transport, 'transport'))
+        : (url != null ? McpTransport.http : McpTransport.stdio);
+
+    if (resolved == McpTransport.http && (url == null || url.trim().isEmpty)) {
+      throw const McpOptionException(McpOptionError.urlRequired);
+    }
+    if (resolved != McpTransport.http && url != null) {
+      throw McpOptionException(McpOptionError.urlNeedsHttp, resolved.cliName);
+    }
+    if (resolved != McpTransport.http && headers.isNotEmpty) {
+      throw McpOptionException(
+        McpOptionError.headerNeedsHttp,
+        resolved.cliName,
+      );
+    }
+    if (name != null) {
+      if (resolved == McpTransport.none) {
+        throw const McpOptionException(McpOptionError.nameWithNone);
+      }
+      if (name.trim().isEmpty) {
+        throw const McpOptionException(McpOptionError.nameEmpty);
+      }
+    }
+
+    final parsedHeaders = <String, String>{};
+    for (final header in headers) {
+      final colon = header.indexOf(':');
+      final key = colon < 0 ? '' : header.substring(0, colon).trim();
+      if (key.isEmpty) {
+        throw McpOptionException(McpOptionError.headerInvalid, header);
+      }
+      parsedHeaders[key] = header.substring(colon + 1).trim();
+    }
+
+    return McpDestination(
+      transport: resolved,
+      name: name?.trim() ?? defaultName,
+      url: url,
+      headers: parsedHeaders,
+    );
+  }
+
+  /// `mcpServers.<name>` に書く値。[McpTransport.none] なら null。
+  Map<String, Object>? get serverEntry {
+    switch (transport) {
+      case McpTransport.stdio:
+        return const {
+          'command': 'utakata',
+          'args': ['mcp'],
+        };
+      case McpTransport.http:
+        return {
+          'type': 'http',
+          'url': url!,
+          if (headers.isNotEmpty) 'headers': headers,
+        };
+      case McpTransport.none:
+        return null;
+    }
+  }
+
+  /// 1.8 系と同じ既定(stdio・`utakata`)か。
+  bool get isDefault => transport == McpTransport.stdio && name == defaultName;
+}
+
 /// [GenerateClaudeIntegrationUsecase.execute] の結果。
 class ClaudeIntegrationResult {
   /// 書き込んだ相対パス。
@@ -59,7 +215,8 @@ class ClaudeIntegrationResult {
 ///
 /// `.mcp.json` は利用者が他の MCP サーバーを足していることがあるため、
 /// 上書きする場面でもファイルごとは置き換えず、`mcpServers.utakata` だけを
-/// 追加・置換する(#30)。JSON として読めないときは書かずに結果で知らせる。
+/// 追加・置換する(#30)。行き先(stdio / http / なし)とキー名は
+/// [McpDestination] で選べる(#35)。JSON として読めないときは書かずに結果で知らせる。
 class GenerateClaudeIntegrationUsecase {
   final Future<void> Function(String path, String content) _writeFile;
   final Future<void> Function(String path) _ensureDir;
@@ -88,13 +245,17 @@ class GenerateClaudeIntegrationUsecase {
   /// (`claude init --only skills` 等。claude-md を選べば CLAUDE.md も上書き)。
   /// このとき [skipExisting] と [forceClaudeMd] は無視する。
   ///
-  /// 上書きするモードでも、既存の `.mcp.json` は `mcpServers.utakata` だけを
+  /// 上書きするモードでも、既存の `.mcp.json` は `mcpServers.<name>` だけを
   /// 追加・置換して他のエントリを残す。
+  ///
+  /// [mcp] は `.mcp.json` に書く行き先(#35)。既定は stdio の `utakata mcp`。
+  /// [McpTransport.none] なら `.mcp.json` には一切触れない。
   Future<ClaudeIntegrationResult> execute(
     String projectDir, {
     bool skipExisting = false,
     bool forceClaudeMd = false,
     Set<ClaudeIntegrationTarget>? only,
+    McpDestination mcp = const McpDestination(),
   }) async {
     bool includes(ClaudeIntegrationTarget target) =>
         only == null || only.contains(target);
@@ -129,12 +290,15 @@ class GenerateClaudeIntegrationUsecase {
     // CLAUDE.md の両方に反映する(v1.6.0)。
     final config = await _configRepo?.read(projectDir);
 
-    if (includes(ClaudeIntegrationTarget.mcp)) {
+    final mcpEntry = mcp.serverEntry;
+    if (includes(ClaudeIntegrationTarget.mcp) && mcpEntry != null) {
       const relativePath = '.mcp.json';
       final path = '$projectDir/$relativePath';
       if (!(skipExisting && exists(path))) {
         final existing = exists(path) ? await _readFile?.call(path) : null;
-        final merged = existing == null ? _mcpJson() : _mergeMcpJson(existing);
+        final merged = existing == null
+            ? _mcpJson(mcp.name, mcpEntry, isDefault: mcp.isDefault)
+            : _mergeMcpJson(existing, mcp.name, mcpEntry);
         if (merged == null) {
           invalidJson.add(relativePath);
         } else if (merged != existing) {
@@ -171,18 +335,13 @@ class GenerateClaudeIntegrationUsecase {
     return ClaudeIntegrationResult(written: written, invalidJson: invalidJson);
   }
 
-  /// utakata の MCP サーバー定義(`.mcp.json` の `mcpServers.utakata`)。
-  static const Map<String, Object> _utakataMcpServer = {
-    'command': 'utakata',
-    'args': ['mcp'],
-  };
-
-  /// 既存の `.mcp.json` に `mcpServers.utakata` だけを追加・置換する。
+  /// 既存の `.mcp.json` に `mcpServers.<name>` だけを追加・置換する。
   ///
   /// 既に同じ定義があれば [existing] をそのまま返す(書式を崩さない)。
   /// JSON として読めない・構造が想定外(ルートや `mcpServers` が
   /// オブジェクトでない)なら null を返し、呼び出し側は書き込まない。
-  String? _mergeMcpJson(String existing) {
+  String? _mergeMcpJson(
+      String existing, String name, Map<String, Object> entry) {
     final Object? decoded;
     try {
       decoded = jsonDecode(existing);
@@ -193,12 +352,11 @@ class GenerateClaudeIntegrationUsecase {
     final servers = decoded['mcpServers'] ?? <String, dynamic>{};
     if (servers is! Map<String, dynamic>) return null;
 
-    final current = servers['utakata'];
-    if (current is Map &&
-        jsonEncode(current) == jsonEncode(_utakataMcpServer)) {
+    final current = servers[name];
+    if (current is Map && jsonEncode(current) == jsonEncode(entry)) {
       return existing;
     }
-    servers['utakata'] = _utakataMcpServer;
+    servers[name] = entry;
     decoded['mcpServers'] = servers;
     return '${const JsonEncoder.withIndent('  ').convert(decoded)}\n';
   }
@@ -257,14 +415,25 @@ class GenerateClaudeIntegrationUsecase {
       ..writeln('## 構造ルール')
       ..writeln()
       ..writeln('- 実装前に `utakata check --json` で構造違反を確認する')
-      ..writeln('- feature 追加は `utakata plan adopt` → `utakata apply --scope feature`')
+      ..writeln('- feature 追加は `utakata feature add <name>`(plan.yaml への登録と必須ファイルの生成まで行う)。'
+          '既存コードの取り込みは `utakata plan adopt` → `utakata apply --scope feature`')
       ..writeln('- ファイルを手動作成せず、utakata CLI で構造を拡張する')
       ..writeln('- コミット前に `utakata check` を実行する');
 
     return buffer.toString();
   }
 
-  String _mcpJson() => '''
+  /// `.mcp.json` が無いときに書く内容。既定(stdio・`utakata`)は 1.8 系と
+  /// 同じ文字列のまま、それ以外は JSON として組み立てる。
+  String _mcpJson(String name, Map<String, Object> entry,
+      {required bool isDefault}) {
+    if (!isDefault) {
+      final json = const JsonEncoder.withIndent('  ').convert({
+        'mcpServers': {name: entry},
+      });
+      return '$json\n';
+    }
+    return '''
 {
   "mcpServers": {
     "utakata": {
@@ -274,6 +443,7 @@ class GenerateClaudeIntegrationUsecase {
   }
 }
 ''';
+  }
 
   /// `.claude/settings.json` を `records.agent_write` に応じて組み立てる。
   ///
@@ -379,9 +549,11 @@ description: |
 
 1. **計画**: feature は `doc/specs/plan.yaml` に宣言する(name / permission /
    entities)。CLI でやるなら `utakata feature add <name> --entity <e> --permission user`
-   (`--template <id>` で feature プリセットも適用できる)
-2. **生成**: `utakata apply --scope feature` — plan.yaml が宣言していて `lib/` に
-   無いものだけを生成する(`--dry-run` で事前確認可)
+   — plan.yaml に登録し、その feature の必須ファイル(空)まで作るので、続けて
+   `check` が通る(同じ名前が plan.yaml に既にあれば追記しない。
+   `--template <id>` で feature プリセットも適用できる)
+2. **生成**: plan.yaml を手で書いたときは `utakata apply --scope feature` —
+   plan.yaml が宣言していて `lib/` に無いものだけを生成する(`--dry-run` で事前確認可)
 3. **検証**: `utakata check --json` — 不足・余分・命名規則違反を1回で報告する。
    **コミット前に必ず `utakata check` を実行する**
 

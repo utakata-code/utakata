@@ -35,6 +35,18 @@ dart pub global activate utakata
 
 `$HOME/.pub-cache/bin` を `PATH` に追加してください。
 
+### 環境変数
+
+| 変数 | 用途 |
+|---|---|
+| `UTAKATA_FLUTTER` | flutter を起動するコマンド列(空白区切り)。以下のどれよりも優先。シェルを介さず `Process.run(1語目, [2語目以降…, flutter の引数])` で起動します。`flutter` の台本を直に実行できない環境(Android で実行権が無い等)向け: `UTAKATA_FLUTTER="/system/bin/sh /data/…/flutter/bin/flutter"` |
+| `FLUTTER_PATH` | `flutter` 実行ファイルのフルパス |
+| `FLUTTER_ROOT` | Flutter SDK のルート(`{root}/bin/flutter` を使う) |
+| `UTAKATA_GIT` | git を起動するコマンド列(書式は `UTAKATA_FLUTTER` と同じ)。git を使うのは `arch get` / `vault get` だけ |
+| `UTAKATA_LANG` | CLI メッセージの言語(`ja` / `en`。未設定時は `LANG` から推定) |
+
+flutter は `UTAKATA_FLUTTER` → `FLUTTER_PATH` → `FLUTTER_ROOT` → `PATH`(`which` / `where`)の順に探します。`UTAKATA_FLUTTER` / `UTAKATA_GIT` では、空白を含む語を `'...'` か `"..."` で囲むか、空白を `\` でエスケープします(変数展開はしません)。`\` はエスケープ文字なので、Windows のパスは単引用符で囲んでください(`'C:\flutter\bin\flutter.bat'`)。閉じていない引用符はエラーになります。
+
 ---
 
 ## クイックスタート
@@ -101,14 +113,14 @@ features:
 |---|---|
 | `utakata doc init` | Flutter プロジェクト本体より先に `doc/` ワークスペース(specs/records/preview/impl/knowledge/archive)+ `utakata.yaml` を作成する |
 | `utakata doc show <config\|plan\|imports\|records\|impl>` / `utakata doc list` | `utakata.yaml` / `doc/specs/plan.yaml` / `import_rules` / 記録の扱いのリファレンスを表示する(インストール済みバージョンに対応。MCP の `doc_get` でも取得可能) |
-| `utakata create <name> [--org] [--platforms] [--arch]` | 選択したアーキテクチャで Flutter プロジェクトを新規作成し、`.mcp.json` + `.claude/` も生成する |
+| `utakata create <name> [--org] [--platforms] [--arch] [--mcp ...]` | 選択したアーキテクチャで Flutter プロジェクトを新規作成し、`.mcp.json` + `.claude/` も生成する。`claude init` と同じ `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` を受け付ける([MCP の行き先](#mcp-の行き先)) |
 | `utakata doctor [--migrate]` | プロジェクトを診断する。`--migrate` は旧 `AI/` ベースのレイアウト(または独自運用の `doc/`)を現行レイアウトへ移行する |
 
 ### 構造
 
 | コマンド | 説明 |
 |---|---|
-| `utakata feature add <name> [--entity] [--permission] [--template <id>]` | feature を1つスキャフォールドする。`--template` は feature プリセット(プロジェクトまたは `~/.utakata/feature_templates/` から解決する `manifest.yaml`)を適用し、同じ操作で `plan.yaml` にも登録する |
+| `utakata feature add <name> [--entity] [--permission] [--arch] [--template <id>]` | feature を1つスキャフォールドする。`doc/specs/plan.yaml` があれば feature を登録し(`name` / `permission` / `entities`。`architecture` は `--arch` を明示したときだけ。同じ名前が既にあれば追記しない)、`apply` と同じく必須ファイルを空で作るので、続けて `check` が通る。plan.yaml が無ければ今までどおりフォルダーを作るだけ(plan.yaml は作らない)。`--template` は feature プリセット(プロジェクトまたは `~/.utakata/feature_templates/` から解決する `manifest.yaml`)を適用し、同じ操作で `plan.yaml` への登録と必須ファイルの生成も行う |
 | `utakata apply [--scope all\|feature\|core] [--dry-run]` | `plan.yaml` が宣言していて `lib/` に無いものを生成する |
 | `utakata plan adopt [-y]` | `lib/features/` にあるが `plan.yaml` に無い feature を検出し追記する(既存のコメント・書式は保持) |
 | `utakata plan expand [--dry-run] [--feature <name>]` | 自動導出されている層ごとのファイル構成を `plan.yaml` に書き出す(以後は手で増減できる) |
@@ -152,7 +164,7 @@ features:
 | `utakata mcp` | ステートレス・読み取り専用の MCP サーバーを stdio で起動する(`structure_get`・`check_run`・`plan_get`・`log_query`・`agreements_query`・`guide_get`・`guide_for_file`・`config_get`・`doc_get`・`vault_list`・`vault_get`、および `records.agent_read.messages` 有効時のみ `message_query`) |
 | `utakata vault list\|show\|get` | クライアント説明用の実務ナレッジ Vault を参照する(`vault:` で設定。通常は `~/.utakata/config.yaml`) |
 | `utakata skills sync [--force]` | `utakata.yaml` の `skills` リストをアーキテクチャ同梱 SKILL から `.claude/skills/` に同期する(managed マーカー保護: 人間の作ったファイルは絶対に上書きしない) |
-| `utakata claude init [--only <対象>] [--force]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成。`--only skills` のように対象(`skills` / `agents` / `mcp` / `settings` / `claude-md`、複数可)を選ぶとそれだけを上書きで再生成。`--force` は全再生成で、`settings.json` と `CLAUDE.md` はファイルごと上書きされる。`.mcp.json` はどのモードでも `mcpServers.utakata` だけを追加・置換し、他のサーバーは残す |
+| `utakata claude init [--only <対象>] [--force] [--mcp ...]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成。`--only skills` のように対象(`skills` / `agents` / `mcp` / `settings` / `claude-md`、複数可)を選ぶとそれだけを上書きで再生成。`--force` は全再生成で、`settings.json` と `CLAUDE.md` はファイルごと上書きされる。`.mcp.json` はどのモードでも `mcpServers.utakata`(または `--mcp-name` のキー)だけを追加・置換し、他のサーバーは残す。そのエントリの行き先は `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` で選ぶ([MCP の行き先](#mcp-の行き先)) |
 
 `diff` は `check` への永続的なエイリアスとして残ります。`scan`・`validate`・`feature init`・`core`・`arch create` は削除・改名されました。詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
@@ -169,6 +181,41 @@ features:
 
 ファイルを手動で作成せず、`utakata` CLI でプロジェクト構造を拡張してください。コミット前に `utakata check` を実行することを推奨します。
 
+### MCP の行き先
+
+既定の `.mcp.json` は `utakata mcp` を stdio で起動します。MCP を別の場所が出している(HTTP で MCP を出す IDE など)とき、または MCP クライアントから見て `utakata` が `PATH` に無いときは、`claude init` / `create` のフラグで行き先を選べます。
+
+| オプション | 意味 |
+|---|---|
+| `--mcp=stdio\|http\|none` | `stdio`(既定)= `{"command": "utakata", "args": ["mcp"]}`。`http` = `{"type": "http", "url": ..., "headers": {...}}`。`none` = `.mcp.json` に一切触れない(`--only mcp` も何もしない) |
+| `--mcp-url <url>` | `http` の URL(必須)。`--mcp-url` だけを指定したときは `--mcp=http` とみなす。そのまま書くので、`${VAR}` は Claude Code が環境変数で展開する |
+| `--mcp-header 'Name: value'` | `http` のヘッダー(複数可)。最初の `:` で分けて前後の空白を除く。指定が無ければ `headers` は書かない |
+| `--mcp-name <name>` | `mcpServers` で utakata が追加・置換するキー(既定 `utakata`)。他のサーバーは残す |
+
+矛盾する組み合わせ(URL の無い `--mcp=http`、`stdio` / `none` と `--mcp-url` / `--mcp-header`、`none` と `--mcp-name`、`:` の無いヘッダー)は何も書かずに終了コード 64 で終わります。
+
+```bash
+# IDE が HTTP で出す MCP を指す。${...} は Claude Code が展開する
+utakata claude init --only mcp \
+  --mcp-url '${MIDE_MCP_URL}' \
+  --mcp-header 'Authorization: Bearer ${MIDE_MCP_TOKEN}' \
+  --mcp-name mobile-ide
+```
+
+```json
+{
+  "mcpServers": {
+    "mobile-ide": {
+      "type": "http",
+      "url": "${MIDE_MCP_URL}",
+      "headers": { "Authorization": "Bearer ${MIDE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+これらのフラグが変えるのは `.mcp.json` だけです。`.claude/settings.json` のフックとスキルは引き続き `utakata` CLI を呼びます(utakata の MCP は読み取り専用で、`impl new` / `log add` / `apply` などの書き込みには CLI が要るため)。`http` / `none` にしても、フックから `utakata` を呼べるようにしておいてください。選んだ行き先はどこにも保存しないため、後で `.mcp.json` を再生成するとき(`--force` / `--only mcp`)は同じフラグを付け直してください(付けないと既定の stdio の `mcpServers.utakata` が足されます)。
+
 ---
 
 ## アーキテクチャ
@@ -181,6 +228,22 @@ packages/utakata_code/lib/src/
 ├── 1_domain/          # エンティティ・リポジトリI/F・ユースケース・純関数サービス
 ├── 2_infrastructure/  # ファイルシステム/YAML/JSONL/プロセスのデータソース・モデル・リポジトリ実装
 └── 3_application/     # コマンドハンドラ・Runner・プレゼンター・MCP サーバー
+```
+
+### 単体の実行ファイルと同梱ファイル
+
+`dart compile exe bin/utakata.dart` で 1 つの実行ファイルにできます。実行ファイルからはパッケージの場所が分からないため、実行時に読むファイル(`lib/src/0_templates/**` と `doc/*.md`)を `lib/src/bundled_assets.g.dart` に埋め込み、初回に `~/.utakata/cache/bundled-<版>/` へ書き出して使います。
+
+同梱ファイルは次の順で探します:
+
+1. 環境変数 `UTAKATA_ASSETS_DIR` — パッケージルートと同じ並び(`lib/src/0_templates/`, `doc/`)のディレクトリ
+2. パッケージのディレクトリ(`dart run` / `dart pub global activate`)
+3. 上記の埋め込み版
+
+`lib/src/0_templates/` 配下(`tool/sync_arch_lib.dart` での同期を含む)や `doc/*.md` を変えたら、埋め込み版を作り直してください(古いままだとテストが落ちます):
+
+```sh
+dart run tool/generate_bundled_assets.dart
 ```
 
 ---

@@ -2,46 +2,72 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'command_resolver.dart';
+
 /// git コマンドが見つからないときの例外。
 ///
 /// `runInShell: true` ではシェルが「command not found」で終わるだけで
 /// [ProcessException] にならないため、終了コード(127 / Windows の 9009)も
 /// この例外に読み替える(Issue #32)。
+///
+/// [overrideEnvVar] が非 null のときは `UTAKATA_GIT` で差し替えた起動方法が
+/// 失敗しており、案内にその環境変数名を出す(Issue #37)。
 class GitNotFoundException implements Exception {
   final String detail;
+  final String? overrideEnvVar;
 
-  const GitNotFoundException(this.detail);
+  const GitNotFoundException(this.detail, {this.overrideEnvVar});
 
   @override
-  String toString() => 'git が見つかりません。取得には git が必要です。'
-      'vault なら `path:` で手元のフォルダーを指すか、git をインストールしてください'
-      '($detail)';
+  String toString() {
+    final envVar = overrideEnvVar;
+    if (envVar != null) {
+      return '$envVar で指定した git を起動できません。'
+          '$envVar の値を確かめるか、外して既定の git を使ってください'
+          '($detail)';
+    }
+    return 'git が見つかりません。取得には git が必要です。'
+        'vault なら `path:` で手元のフォルダーを指すか、git をインストールしてください。'
+        '実行権の無い git などは ${CommandResolver.gitEnvVar}="/system/bin/sh /path/to/git" '
+        'のように起動方法ごと指定できます'
+        '($detail)';
+  }
 }
 
 /// git コマンドの薄いラッパ(knowledge_repo / vault のフェッチ専用)。
 ///
 /// git はオプトイン機能(`arch get` / `vault get`)を使う場合のみ必要。
 /// 不在時は [GitNotFoundException] を投げる。
+/// 環境変数 `UTAKATA_GIT` があればその起動方法を使う([CommandResolver.resolveGit])。
 class GitDataSource {
   /// 呼び出す git の実行ファイル名(テストで「git が無い」状況を作る用)。
+  /// `UTAKATA_GIT` が設定されていればそちらが優先される。
   final String executable;
 
-  const GitDataSource({this.executable = 'git'});
+  final CommandResolver resolver;
+
+  const GitDataSource({
+    this.executable = 'git',
+    this.resolver = const CommandResolver(),
+  });
 
   /// シェル経由で「コマンドが見つからない」ときの終了コード
   /// (POSIX sh: 127 / Windows cmd: 9009)。
   static const _commandNotFoundExitCodes = {127, 9009};
 
   Future<ProcessResult> _run(List<String> args) async {
+    final command = resolver.resolveGit(defaultExecutable: executable);
     final ProcessResult result;
     try {
-      result = await Process.run(executable, args, runInShell: true);
+      result = await command.run(args);
     } on ProcessException catch (e) {
-      throw GitNotFoundException(e.message);
+      throw GitNotFoundException(e.message,
+          overrideEnvVar: command.overrideEnvVar);
     }
     if (_commandNotFoundExitCodes.contains(result.exitCode)) {
       throw GitNotFoundException(
-          'exit ${result.exitCode}: ${result.stderr.toString().trim()}');
+          'exit ${result.exitCode}: ${result.stderr.toString().trim()}',
+          overrideEnvVar: command.overrideEnvVar);
     }
     return result;
   }
@@ -56,7 +82,8 @@ class GitDataSource {
       targetDir,
     ]);
     if (result.exitCode != 0) {
-      throw Exception('git clone failed (${result.exitCode}): ${result.stderr}');
+      throw Exception(
+          'git clone failed (${result.exitCode}): ${result.stderr}');
     }
   }
 

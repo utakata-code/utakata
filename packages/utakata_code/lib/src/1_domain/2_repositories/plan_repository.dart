@@ -13,9 +13,19 @@ abstract interface class PlanRepository {
   /// plan.yaml が存在しなければ新規作成し、意図レベルで書き込む。
   Future<void> write(String projectDir, PlanIntent plan);
 
-  /// スキャンで見つかった未計画 feature を、コメント・書式を保持したまま
-  /// plan.yaml の `features:` 配列へ外科的に追記する(`plan adopt`)。
-  Future<void> adoptFeature(String projectDir, PlanFeatureIntent feature);
+  /// feature を、コメント・書式を保持したまま plan.yaml の `features:` 配列へ
+  /// 外科的に追記する(`plan adopt` / `feature add`)。
+  ///
+  /// - 同じ名前の feature が既にあれば何も書かず
+  ///   [AdoptFeatureResult.alreadyPlanned] を返す(Issue #34)
+  /// - plan.yaml が無いとき、[createIfMissing] が true なら新しく作り、
+  ///   false なら何も書かず [AdoptFeatureResult.noPlan] を返す
+  /// - `features: []` へは block 形式で書く(flow 形式 `[{...}]` にしない)
+  Future<AdoptFeatureResult> adoptFeature(
+    String projectDir,
+    PlanFeatureIntent feature, {
+    bool createIfMissing = true,
+  });
 
   /// [featureName] の `layers` に層宣言をマージして書き込む(Issue #12)。
   /// コメント・書式は保持される。feature が見つからなければ false を返す。
@@ -51,4 +61,16 @@ abstract interface class PlanRepository {
     String layerPath,
     String item,
   );
+}
+
+/// [PlanRepository.adoptFeature] の結果。
+enum AdoptFeatureResult {
+  /// plan.yaml に追記した(plan.yaml を新しく作った場合も含む)
+  added,
+
+  /// 同じ名前の feature が既にあるため追記しなかった
+  alreadyPlanned,
+
+  /// plan.yaml が無く、作らない指定だったため何もしなかった
+  noPlan,
 }

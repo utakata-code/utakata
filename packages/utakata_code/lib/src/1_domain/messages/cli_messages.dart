@@ -106,6 +106,8 @@ abstract interface class CliMessages {
   String featureAddPath(String path);
   String featureAddDone(String name);
   String get featureAddCancel;
+  String featureAddPlanAdded(String name);
+  String featureAddPlanAlreadyPlanned(String name);
 
   // ─── feature init ───
   String get featureInitNone;
@@ -346,6 +348,17 @@ abstract interface class CliMessages {
   String get optForceRegenerate;
   String get optClaudeOnly;
   String claudeInitInvalidJson(String path);
+  String get optMcp;
+  String get optMcpUrl;
+  String get optMcpHeader;
+  String get optMcpName;
+  String get mcpUrlRequired;
+  String mcpUrlNeedsHttp(String transport);
+  String mcpHeaderNeedsHttp(String transport);
+  String mcpHeaderInvalid(String header);
+  String get mcpNameWithNone;
+  String get mcpNameEmpty;
+  String get claudeInitMcpNone;
   String get optUpdateRef;
   String get optExpandDryRun;
   String get optExpandFeature;

@@ -1,33 +1,35 @@
 import '../1_entities/feature_spec_entity.dart';
 import '../1_entities/plan/plan_intent.dart';
 import '../2_repositories/feature_template_repository.dart';
-import '../2_repositories/plan_repository.dart';
 import '../messages/cli_messages.dart';
 import 'add_feature_usecase.dart';
+import 'register_feature_in_plan_usecase.dart';
 
 /// `utakata feature add <name> --template <id>` — feature プリセットの適用
 /// (仕様書 §10)。
 ///
 /// 構造の生成(AddFeatureUsecase)と plan.yaml への意図追記
-/// (PlanRepository.adoptFeature)を1回の呼び出しでまとめて行う
-/// (適用直後から check がクリーンになるようにするため)。
+/// (PlanRepository.adoptFeature)、その feature の必須ファイルの生成を
+/// 1回の呼び出しでまとめて行う(適用直後から check がクリーンになるように
+/// するため)。plan.yaml に同じ名前の feature が既にあれば追記しない
+/// (Issue #34)。
 class ApplyFeatureTemplateUsecase {
   final FeatureTemplateRepository _templateRepo;
-  final PlanRepository _planRepo;
   final AddFeatureUsecase _addFeatureUsecase;
+  final RegisterFeatureInPlanUsecase _registerUsecase;
   final CliMessages _msg;
 
   const ApplyFeatureTemplateUsecase({
     required FeatureTemplateRepository templateRepo,
-    required PlanRepository planRepo,
     required AddFeatureUsecase addFeatureUsecase,
+    required RegisterFeatureInPlanUsecase registerUsecase,
     required CliMessages msg,
   })  : _templateRepo = templateRepo,
-        _planRepo = planRepo,
         _addFeatureUsecase = addFeatureUsecase,
+        _registerUsecase = registerUsecase,
         _msg = msg;
 
-  Future<FeatureSpecEntity> execute(
+  Future<(FeatureSpecEntity, RegisterFeatureResult)> execute(
     String projectDir,
     String featureName,
     String templateId, {
@@ -47,7 +49,8 @@ class ApplyFeatureTemplateUsecase {
     );
 
     await _addFeatureUsecase.execute(projectDir, spec);
-    await _planRepo.adoptFeature(
+    // テンプレート適用は従来どおり plan.yaml が無ければ作る
+    final registration = await _registerUsecase.execute(
       projectDir,
       PlanFeatureIntent(
         name: featureName,
@@ -55,8 +58,9 @@ class ApplyFeatureTemplateUsecase {
         entities: manifest.entities.isNotEmpty ? manifest.entities : [featureName],
         architectureId: architectureId,
       ),
+      createPlanIfMissing: true,
     );
 
-    return spec;
+    return (spec, registration);
   }
 }

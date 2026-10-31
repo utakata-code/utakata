@@ -170,7 +170,9 @@ class _FakePlanRepo implements PlanRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> adoptFeature(String projectDir, PlanFeatureIntent feature) =>
+  Future<AdoptFeatureResult> adoptFeature(
+          String projectDir, PlanFeatureIntent feature,
+          {bool createIfMissing = true}) =>
       throw UnimplementedError();
 
   @override

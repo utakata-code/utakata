@@ -6,6 +6,7 @@ import '../../1_domain/3_usecases/generate_claude_integration_usecase.dart';
 import '../../1_domain/messages/cli_messages.dart';
 import 'base_command.dart';
 import 'logger.dart';
+import 'mcp_destination_options.dart';
 
 /// utakata claude — Claude Code 統合の管理コマンド群
 class ClaudeCommand extends Command<int> {
@@ -47,7 +48,8 @@ class _ClaudeInitCommand extends BaseCommand {
           valueHelp: 'target',
           allowed: [
             for (final target in ClaudeIntegrationTarget.values) target.cliName
-          ]);
+          ])
+      ..addMcpDestinationOptions(_msg);
   }
 
   @override
@@ -60,11 +62,19 @@ class _ClaudeInitCommand extends BaseCommand {
             for (final name in onlyNames)
               ClaudeIntegrationTarget.fromCliName(name)!
           };
+    final mcp = parseMcpDestination(argResults!, _msg);
+    if (mcp == null) return 64; // EX_USAGE
+    if (mcp.transport == McpTransport.none &&
+        only != null &&
+        only.contains(ClaudeIntegrationTarget.mcp)) {
+      Logger.info(_msg.claudeInitMcpNone);
+    }
     final result = await _usecase.execute(
       Directory.current.path,
       skipExisting: !force,
       forceClaudeMd: force,
       only: only,
+      mcp: mcp,
     );
     final written = result.written;
 

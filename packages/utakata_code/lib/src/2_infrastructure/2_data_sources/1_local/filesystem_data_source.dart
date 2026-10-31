@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'package:path/path.dart' as p;
 
 import '../../../1_domain/1_entities/structure/structure_node.dart';
+import '../../../bundled_assets.g.dart';
+import '../../../version.g.dart';
 
 /// ファイルシステム操作を担うデータソース
 ///
@@ -191,26 +193,84 @@ class FilesystemDataSource {
 
   /// パッケージに同梱されたテンプレートディレクトリのパスを返す
   ///
-  /// `dart:isolate` の `Isolate.resolvePackageUri` を使用して、
-  /// グローバルインストール時やローカル実行時に関わらず確実にパスを解決する。
+  /// パッケージルートは [_packageRoot] の順で決める。例外は投げない —
+  /// どこにも無ければ存在しないパスを返し、呼び出し側(bin/utakata.dart の
+  /// 既定ナレッジへのフォールバック等)が存在確認で判断する。
   Future<String> resolvePackageTemplatePath(String relativePath) async {
-    final uri = await Isolate.resolvePackageUri(
-        Uri.parse('package:utakata/src/0_templates/$relativePath'));
-    if (uri != null) {
-      return uri.toFilePath();
-    }
-    throw Exception('Failed to resolve package template path: $relativePath');
+    final root = await _packageRoot();
+    return p.join(root, 'lib', 'src', '0_templates', relativePath);
   }
 
   /// パッケージルート直下のファイル(`doc/*.md` 等)の絶対パスを解決する。
-  ///
-  /// `package:utakata/` は lib/ を指すため、その親をパッケージルートとして扱う
-  /// (pub にはパッケージ全体が公開されるため、グローバル導入後も参照できる)。
+  /// 見つからなければ null。
   Future<String?> resolvePackageFilePath(String relativePath) async {
-    final libUri = await Isolate.resolvePackageUri(Uri.parse('package:utakata/'));
-    if (libUri == null) return null;
-    final packageRoot = Directory.fromUri(libUri).parent.path;
-    final path = p.join(packageRoot, relativePath);
+    final path = p.join(await _packageRoot(), relativePath);
     return File(path).existsSync() ? path : null;
+  }
+
+  /// 環境変数でパッケージルートを差し替えるときの名前。
+  /// パッケージルートと同じ並び(`lib/src/0_templates`, `doc`)のディレクトリを指す。
+  static const assetsDirEnv = 'UTAKATA_ASSETS_DIR';
+
+  static Future<String>? _packageRootCache;
+
+  /// 同梱ファイルを読むためのパッケージルート(Issue #36):
+  ///   ① 環境変数 [assetsDirEnv]
+  ///   ② `Isolate.resolvePackageUri`(dart run / pub global activate)
+  ///   ③ 埋め込み済みの [bundledAssets] を `~/.utakata/cache/bundled-<版>/`
+  ///      へ一度だけ書き出したもの(`dart compile exe` の実行ファイル向け)
+  Future<String> _packageRoot() => _packageRootCache ??= _computePackageRoot();
+
+  static Future<String> _computePackageRoot() async {
+    final override = Platform.environment[assetsDirEnv];
+    if (override != null && override.isNotEmpty) return p.absolute(override);
+
+    try {
+      final libUri =
+          await Isolate.resolvePackageUri(Uri.parse('package:utakata/'));
+      if (libUri != null) {
+        final root = Directory.fromUri(libUri).parent.path;
+        if (Directory(p.join(root, 'lib', 'src', '0_templates')).existsSync()) {
+          return root;
+        }
+      }
+    } on Object {
+      // AOT 等で解決できない場合は埋め込み版へ
+    }
+
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        Directory.systemTemp.path;
+    final target =
+        p.join(home, '.utakata', 'cache', 'bundled-$packageVersion');
+    try {
+      extractBundledAssets(target);
+    } on FileSystemException {
+      // 書き出せなくても投げない(存在しないパスとして扱われる)
+    }
+    return target;
+  }
+
+  /// [bundledAssets] を [targetDir] に書き出す。既にあれば何もしない。
+  ///
+  /// 途中で落ちても中途半端なディレクトリを残さないよう、隣の一時
+  /// ディレクトリに書いてから rename する。並行実行で先を越された場合は
+  /// 一時ディレクトリを捨てて相手の結果を使う。
+  static void extractBundledAssets(String targetDir) {
+    if (Directory(targetDir).existsSync()) return;
+    final parent = Directory(p.dirname(targetDir))..createSync(recursive: true);
+    final temp = parent.createTempSync('${p.basename(targetDir)}.tmp-');
+    try {
+      for (final entry in bundledAssets.entries) {
+        final file = File(p.joinAll([temp.path, ...entry.key.split('/')]));
+        file.parent.createSync(recursive: true);
+        file.writeAsStringSync(entry.value);
+      }
+      temp.renameSync(targetDir);
+    } on FileSystemException {
+      if (!Directory(targetDir).existsSync()) rethrow;
+    } finally {
+      if (temp.existsSync()) temp.deleteSync(recursive: true);
+    }
   }
 }
