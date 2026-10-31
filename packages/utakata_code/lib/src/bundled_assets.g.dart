@@ -631,8 +631,18 @@ const Map<String, String> bundledAssets = <String, String>{
       "命名違反として報告されます。\n"
       "\n"
       "**Q. plan.yaml を書かずに `feature add` してもよい？**\n"
-      "`utakata feature add <name>` は plan.yaml にも登録します。逆に既に手で書いた\n"
-      "コードがある場合は `utakata plan adopt` で取り込めます。\n",
+      "はい。`utakata feature add <name>` は、plan.yaml があればその feature を\n"
+      "`features:` に登録し、check が必須とする空ファイルも作ります(`apply` と同じ\n"
+      "導出。既存ファイルは上書きしません)。続けて `utakata check` がそのまま通ります。\n"
+      "\n"
+      "- 書く中身は `name` / `permission` / `entities`(`--entity`、省略時は feature 名)。\n"
+      "  `architecture` は `--arch` を明示したときだけ書きます\n"
+      "- 同じ名前の feature が既にあれば追記せず、plan.yaml 側の宣言で必須ファイルを作ります\n"
+      "- `features: []` へ追記するときも block 形式で書きます(`[{name: ...}]` にしない)\n"
+      "- plan.yaml が無いプロジェクトでは今までどおりフォルダーを作るだけで、\n"
+      "  plan.yaml を新しく作りません(作るなら `utakata doc init`)\n"
+      "\n"
+      "逆に既に手で書いたコードがある場合は `utakata plan adopt` で取り込めます。\n",
   "doc/records.md":
       "# doc/records/ — 案件の記録と、AI に許す範囲\n"
       "\n"
