@@ -284,7 +284,9 @@ class EnMessages implements CliMessages {
   String get flutterNotFound =>
       'flutter command not found. '
       'Set the FLUTTER_PATH environment variable to the full path. '
-      'Example: export FLUTTER_PATH=/path/to/flutter/bin/flutter';
+      'Example: export FLUTTER_PATH=/path/to/flutter/bin/flutter '
+      '(for a script without the execute bit, set the whole command line, e.g. '
+      'UTAKATA_FLUTTER="/system/bin/sh /path/to/flutter/bin/flutter")';
   @override
   String yamlParseFailed(String path) => 'Failed to parse YAML: $path';
   @override

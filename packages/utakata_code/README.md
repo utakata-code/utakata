@@ -34,6 +34,18 @@ dart pub global activate utakata
 
 Make sure `$HOME/.pub-cache/bin` is added to your `PATH`.
 
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `UTAKATA_FLUTTER` | The command line that starts flutter, as space-separated words. Takes precedence over everything below. Run directly without a shell: `Process.run(word1, [word2…, <flutter args>])`. Use it when the `flutter` script cannot be executed directly (e.g. no execute bit on Android): `UTAKATA_FLUTTER="/system/bin/sh /data/…/flutter/bin/flutter"` |
+| `FLUTTER_PATH` | Full path to the `flutter` executable |
+| `FLUTTER_ROOT` | Flutter SDK root (`{root}/bin/flutter` is used) |
+| `UTAKATA_GIT` | The command line that starts git (same format as `UTAKATA_FLUTTER`). Only `arch get` / `vault get` use git |
+| `UTAKATA_LANG` | CLI message language (`ja` / `en`; inferred from `LANG` when unset) |
+
+flutter is looked up in the order `UTAKATA_FLUTTER` → `FLUTTER_PATH` → `FLUTTER_ROOT` → `PATH` (`which` / `where`). In `UTAKATA_FLUTTER` / `UTAKATA_GIT`, quote words that contain spaces with `'...'` or `"..."`, or escape a space with `\`; there is no variable expansion. Because `\` is an escape character, quote Windows paths with single quotes (`'C:\flutter\bin\flutter.bat'`). An unterminated quote is an error.
+
 ---
 
 ## Quick Start

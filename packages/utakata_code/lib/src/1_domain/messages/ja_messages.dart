@@ -271,7 +271,8 @@ class JaMessages implements CliMessages {
   String get flutterNotFound =>
       'flutter コマンドが見つかりません。'
       'FLUTTER_PATH 環境変数にフルパスを設定してください。'
-      '例: export FLUTTER_PATH=/path/to/flutter/bin/flutter';
+      '例: export FLUTTER_PATH=/path/to/flutter/bin/flutter'
+      '(実行権の無い台本なら UTAKATA_FLUTTER="/system/bin/sh /path/to/flutter/bin/flutter" のように起動方法ごと指定できます)';
   @override
   String yamlParseFailed(String path) => '$path の YAML 解析に失敗しました。';
   @override

@@ -35,6 +35,18 @@ dart pub global activate utakata
 
 `$HOME/.pub-cache/bin` を `PATH` に追加してください。
 
+### 環境変数
+
+| 変数 | 用途 |
+|---|---|
+| `UTAKATA_FLUTTER` | flutter を起動するコマンド列(空白区切り)。以下のどれよりも優先。シェルを介さず `Process.run(1語目, [2語目以降…, flutter の引数])` で起動します。`flutter` の台本を直に実行できない環境(Android で実行権が無い等)向け: `UTAKATA_FLUTTER="/system/bin/sh /data/…/flutter/bin/flutter"` |
+| `FLUTTER_PATH` | `flutter` 実行ファイルのフルパス |
+| `FLUTTER_ROOT` | Flutter SDK のルート(`{root}/bin/flutter` を使う) |
+| `UTAKATA_GIT` | git を起動するコマンド列(書式は `UTAKATA_FLUTTER` と同じ)。git を使うのは `arch get` / `vault get` だけ |
+| `UTAKATA_LANG` | CLI メッセージの言語(`ja` / `en`。未設定時は `LANG` から推定) |
+
+flutter は `UTAKATA_FLUTTER` → `FLUTTER_PATH` → `FLUTTER_ROOT` → `PATH`(`which` / `where`)の順に探します。`UTAKATA_FLUTTER` / `UTAKATA_GIT` では、空白を含む語を `'...'` か `"..."` で囲むか、空白を `\` でエスケープします(変数展開はしません)。`\` はエスケープ文字なので、Windows のパスは単引用符で囲んでください(`'C:\flutter\bin\flutter.bat'`)。閉じていない引用符はエラーになります。
+
 ---
 
 ## クイックスタート
