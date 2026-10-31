@@ -752,12 +752,49 @@ class EnMessages implements CliMessages {
       'Regenerate only the given targets, overwriting existing files '
       '(repeatable: --only skills,agents). '
       'skills = .claude/skills/utakata-*, agents = .claude/agents/, '
-      'mcp = .mcp.json (only the utakata entry is added/replaced), '
+      'mcp = .mcp.json (only the --mcp-name entry, default utakata, is added/replaced), '
       'settings = .claude/settings.json (overwritten), claude-md = CLAUDE.md (overwritten)';
   @override
   String claudeInitInvalidJson(String path) =>
       '$path was not written: it is not valid JSON '
       '(or mcpServers is not an object). Fix it and run again.';
+  @override
+  String get optMcp =>
+      'Where .mcp.json points the MCP client. stdio = launch `utakata mcp` (default), '
+      'http = the HTTP server given by --mcp-url, none = leave .mcp.json untouched. '
+      'Giving only --mcp-url implies http';
+  @override
+  String get optMcpUrl =>
+      'URL of the HTTP MCP server (required with --mcp=http). Written verbatim, '
+      "so '\${MIDE_MCP_URL}' is expanded by Claude Code from the environment";
+  @override
+  String get optMcpHeader =>
+      "Header sent to the HTTP MCP server ('Name: value', repeatable, --mcp=http only). "
+      "Written verbatim (e.g. 'Authorization: Bearer \${TOKEN}')";
+  @override
+  String get optMcpName =>
+      'Key under mcpServers in .mcp.json that utakata adds/replaces (default: utakata). '
+      'Other keys are kept';
+  @override
+  String get mcpUrlRequired => '--mcp=http requires --mcp-url <url>.';
+  @override
+  String mcpUrlNeedsHttp(String transport) =>
+      '--mcp-url can only be used with --mcp=http (got --mcp=$transport).';
+  @override
+  String mcpHeaderNeedsHttp(String transport) =>
+      '--mcp-header can only be used with --mcp=http (or --mcp-url) '
+      '(got --mcp=$transport).';
+  @override
+  String mcpHeaderInvalid(String header) =>
+      "--mcp-header must be in the form 'Name: value': $header";
+  @override
+  String get mcpNameWithNone =>
+      '--mcp-name cannot be used with --mcp=none (.mcp.json is not touched).';
+  @override
+  String get mcpNameEmpty => '--mcp-name is empty.';
+  @override
+  String get claudeInitMcpNone =>
+      '--mcp=none: .mcp.json is left untouched (--only mcp does nothing).';
   @override
   String get optUpdateRef => 'Re-resolve the ref and update';
   @override
