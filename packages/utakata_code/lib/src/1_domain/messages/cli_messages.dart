@@ -106,6 +106,8 @@ abstract interface class CliMessages {
   String featureAddPath(String path);
   String featureAddDone(String name);
   String get featureAddCancel;
+  String featureAddPlanAdded(String name);
+  String featureAddPlanAlreadyPlanned(String name);
 
   // ─── feature init ───
   String get featureInitNone;

@@ -207,6 +207,12 @@ class JaMessages implements CliMessages {
   String featureAddDone(String name) => 'フィーチャー "$name" を生成しました！';
   @override
   String get featureAddCancel => 'キャンセルしました。';
+  @override
+  String featureAddPlanAdded(String name) =>
+      '📝 doc/specs/plan.yaml に "$name" を追加しました';
+  @override
+  String featureAddPlanAlreadyPlanned(String name) =>
+      'ℹ️  "$name" は doc/specs/plan.yaml に既にあるため追加しませんでした(既存の宣言を使います)';
 
   // ─── feature init ───
   @override

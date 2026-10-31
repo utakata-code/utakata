@@ -266,18 +266,32 @@ class PlanRepositoryImpl implements PlanRepository {
   }
 
   @override
-  Future<void> adoptFeature(String projectDir, PlanFeatureIntent feature) async {
+  Future<AdoptFeatureResult> adoptFeature(
+    String projectDir,
+    PlanFeatureIntent feature, {
+    bool createIfMissing = true,
+  }) async {
     final path = p.join(projectDir, _planYamlPath);
     final existing = await _fs.readFile(path);
     if (existing == null) {
+      if (!createIfMissing) return AdoptFeatureResult.noPlan;
       final fresh = PlanIntent(
         defaultArchitectureId: feature.architectureId ?? 'clean_architecture',
         features: [feature],
       );
       await _fs.writeFile(path, _yamlEdit.render(fresh.toMap()));
-      return;
+      return AdoptFeatureResult.added;
     }
-    final updated = _yamlEdit.appendToList(existing, ['features'], feature.toMap());
+    // 同じ名前の feature は足さない(Issue #34)。plan add / plan expand など
+    // 名前で feature を探す操作が、先にある方しか見なくなるため。
+    if (_yamlEdit.indexOfFeature(existing, feature.name) >= 0) {
+      return AdoptFeatureResult.alreadyPlanned;
+    }
+    // `features: []` へも block 形式で書く。書き換え後に読み直して確かめ、
+    // 合わなければ例外にして何も書かない(Issue #34)。
+    final updated =
+        _yamlEdit.appendToBlockList(existing, ['features'], feature.toMap());
     await _fs.writeFile(path, updated);
+    return AdoptFeatureResult.added;
   }
 }

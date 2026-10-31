@@ -162,5 +162,15 @@ plan.yaml 上で「見たまま」になり編集しやすく、`.dart` で終�
 命名違反として報告されます。
 
 **Q. plan.yaml を書かずに `feature add` してもよい？**
-`utakata feature add <name>` は plan.yaml にも登録します。逆に既に手で書いた
-コードがある場合は `utakata plan adopt` で取り込めます。
+はい。`utakata feature add <name>` は、plan.yaml があればその feature を
+`features:` に登録し、check が必須とする空ファイルも作ります(`apply` と同じ
+導出。既存ファイルは上書きしません)。続けて `utakata check` がそのまま通ります。
+
+- 書く中身は `name` / `permission` / `entities`(`--entity`、省略時は feature 名)。
+  `architecture` は `--arch` を明示したときだけ書きます
+- 同じ名前の feature が既にあれば追記せず、plan.yaml 側の宣言で必須ファイルを作ります
+- `features: []` へ追記するときも block 形式で書きます(`[{name: ...}]` にしない)
+- plan.yaml が無いプロジェクトでは今までどおりフォルダーを作るだけで、
+  plan.yaml を新しく作りません(作るなら `utakata doc init`)
+
+逆に既に手で書いたコードがある場合は `utakata plan adopt` で取り込めます。
