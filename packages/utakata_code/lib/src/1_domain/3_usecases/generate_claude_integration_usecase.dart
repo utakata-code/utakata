@@ -257,7 +257,8 @@ class GenerateClaudeIntegrationUsecase {
       ..writeln('## 構造ルール')
       ..writeln()
       ..writeln('- 実装前に `utakata check --json` で構造違反を確認する')
-      ..writeln('- feature 追加は `utakata plan adopt` → `utakata apply --scope feature`')
+      ..writeln('- feature 追加は `utakata feature add <name>`(plan.yaml への登録と必須ファイルの生成まで行う)。'
+          '既存コードの取り込みは `utakata plan adopt` → `utakata apply --scope feature`')
       ..writeln('- ファイルを手動作成せず、utakata CLI で構造を拡張する')
       ..writeln('- コミット前に `utakata check` を実行する');
 
@@ -379,9 +380,11 @@ description: |
 
 1. **計画**: feature は `doc/specs/plan.yaml` に宣言する(name / permission /
    entities)。CLI でやるなら `utakata feature add <name> --entity <e> --permission user`
-   (`--template <id>` で feature プリセットも適用できる)
-2. **生成**: `utakata apply --scope feature` — plan.yaml が宣言していて `lib/` に
-   無いものだけを生成する(`--dry-run` で事前確認可)
+   — plan.yaml に登録し、その feature の必須ファイル(空)まで作るので、続けて
+   `check` が通る(同じ名前が plan.yaml に既にあれば追記しない。
+   `--template <id>` で feature プリセットも適用できる)
+2. **生成**: plan.yaml を手で書いたときは `utakata apply --scope feature` —
+   plan.yaml が宣言していて `lib/` に無いものだけを生成する(`--dry-run` で事前確認可)
 3. **検証**: `utakata check --json` — 不足・余分・命名規則違反を1回で報告する。
    **コミット前に必ず `utakata check` を実行する**
 

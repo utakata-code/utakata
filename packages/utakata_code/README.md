@@ -107,7 +107,7 @@ features:
 
 | Command | Description |
 |---|---|
-| `utakata feature add <name> [--entity] [--permission] [--template <id>]` | Scaffold one feature. `--template` applies a feature preset (`manifest.yaml` resolved from the project or `~/.utakata/feature_templates/`) and registers it in `plan.yaml` in the same step |
+| `utakata feature add <name> [--entity] [--permission] [--arch] [--template <id>]` | Scaffold one feature. When `doc/specs/plan.yaml` exists, it also registers the feature there (`name` / `permission` / `entities`; `architecture` only with an explicit `--arch`; skipped if a feature of the same name is already planned) and creates the empty required files like `apply`, so `check` passes right away. Without `plan.yaml` it only creates the folders, as before (no `plan.yaml` is created). `--template` applies a feature preset (`manifest.yaml` resolved from the project or `~/.utakata/feature_templates/`) registers it in `plan.yaml` and creates its required files in the same step |
 | `utakata apply [--scope all\|feature\|core] [--dry-run]` | Generate whatever `plan.yaml` declares but `lib/` is missing |
 | `utakata plan adopt [-y]` | Detect features present in `lib/features/` but absent from `plan.yaml`, and append them (keeps existing comments/formatting) |
 | `utakata plan expand [--dry-run] [--feature <name>]` | Materialize the auto-derived per-layer file lists into `plan.yaml`, so you can then edit them by hand |

@@ -108,7 +108,7 @@ features:
 
 | コマンド | 説明 |
 |---|---|
-| `utakata feature add <name> [--entity] [--permission] [--template <id>]` | feature を1つスキャフォールドする。`--template` は feature プリセット(プロジェクトまたは `~/.utakata/feature_templates/` から解決する `manifest.yaml`)を適用し、同じ操作で `plan.yaml` にも登録する |
+| `utakata feature add <name> [--entity] [--permission] [--arch] [--template <id>]` | feature を1つスキャフォールドする。`doc/specs/plan.yaml` があれば feature を登録し(`name` / `permission` / `entities`。`architecture` は `--arch` を明示したときだけ。同じ名前が既にあれば追記しない)、`apply` と同じく必須ファイルを空で作るので、続けて `check` が通る。plan.yaml が無ければ今までどおりフォルダーを作るだけ(plan.yaml は作らない)。`--template` は feature プリセット(プロジェクトまたは `~/.utakata/feature_templates/` から解決する `manifest.yaml`)を適用し、同じ操作で `plan.yaml` への登録と必須ファイルの生成も行う |
 | `utakata apply [--scope all\|feature\|core] [--dry-run]` | `plan.yaml` が宣言していて `lib/` に無いものを生成する |
 | `utakata plan adopt [-y]` | `lib/features/` にあるが `plan.yaml` に無い feature を検出し追記する(既存のコメント・書式は保持) |
 | `utakata plan expand [--dry-run] [--feature <name>]` | 自動導出されている層ごとのファイル構成を `plan.yaml` に書き出す(以後は手で増減できる) |

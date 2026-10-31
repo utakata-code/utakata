@@ -219,6 +219,12 @@ class EnMessages implements CliMessages {
   String featureAddDone(String name) => 'Feature "$name" has been generated!';
   @override
   String get featureAddCancel => 'Cancelled.';
+  @override
+  String featureAddPlanAdded(String name) =>
+      '📝 Added "$name" to doc/specs/plan.yaml';
+  @override
+  String featureAddPlanAlreadyPlanned(String name) =>
+      'ℹ️  "$name" is already in doc/specs/plan.yaml; not added (using the existing declaration)';
 
   // ─── feature init ───
   @override

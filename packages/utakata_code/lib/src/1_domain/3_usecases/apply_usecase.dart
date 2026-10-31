@@ -1,13 +1,10 @@
 import 'package:path/path.dart' as p;
 
 import '../1_entities/feature_spec_entity.dart';
-import '../1_entities/plan/plan_intent.dart';
-import '../1_entities/structure/expected_structure.dart';
 import '../2_repositories/architecture_repository.dart';
 import '../2_repositories/plan_repository.dart';
-import '../services/expected_structure_builder.dart';
 import 'add_feature_usecase.dart';
-import 'architecture_definition_entity_resolver.dart';
+import 'create_required_files_usecase.dart';
 import 'generate_core_usecase.dart';
 
 /// `utakata apply` — plan.yaml から未生成の feature/core を作成するユースケース。
@@ -19,7 +16,7 @@ import 'generate_core_usecase.dart';
 /// バグのクラスを構造的に解消する)。
 ///
 /// ディレクトリに加えて、check が必須と判定するファイル
-/// ([ExpectedStructureBuilder] の requiredFiles)を**空ファイルとして生成**する
+/// ([CreateRequiredFilesUsecase])を**空ファイルとして生成**する
 /// (Issue #19)。命名だけでなく「ファイルの存在自体」を plan.yaml から
 /// 決定論的にコントロールできる。既存ファイルは一切上書きしない。
 class ApplyUsecase {
@@ -99,7 +96,12 @@ class ApplyUsecase {
         }
       }
 
-      createdFiles = await _createRequiredFiles(projectDir, plan,
+      // 必須ファイルの生成は feature add と共有する(Issue #34)
+      createdFiles = await CreateRequiredFilesUsecase(
+        archRepo: _archRepo,
+        fileExists: _fileExists,
+        writeFile: _writeFile,
+      ).execute(projectDir, plan,
           dryRun: dryRun, skipPathPrefixes: blockedPaths);
     }
 
@@ -115,53 +117,6 @@ class ApplyUsecase {
       createdFiles: createdFiles,
       blockedFeatures: blocked,
     );
-  }
-
-  /// check と同一の導出([ExpectedStructureBuilder])で必須ファイルを列挙し、
-  /// 存在しないものを空ファイルとして生成する(Issue #19)。
-  /// 生成した(dry-run 時は生成予定の)プロジェクト相対パスを返す。
-  Future<List<String>> _createRequiredFiles(
-    String projectDir,
-    PlanIntent plan, {
-    required bool dryRun,
-    List<String> skipPathPrefixes = const [],
-  }) async {
-    final architecturesById = await resolveArchitectures(plan, _archRepo);
-    final expected = ExpectedStructureBuilder.build(plan, architecturesById);
-
-    final relativePaths = <String>[];
-    _collectRequiredFiles(expected.topLevel, 'lib/features', relativePaths);
-
-    final created = <String>[];
-    for (final relative in relativePaths) {
-      // ゲートで止めた feature のファイルは作らない
-      if (skipPathPrefixes.any((prefix) => relative.startsWith('$prefix/'))) {
-        continue;
-      }
-      final absolute = p.join(projectDir, relative);
-      if (_fileExists(absolute)) continue;
-      if (!dryRun) await _writeFile(absolute, '');
-      created.add(relative);
-    }
-    created.sort();
-    return created;
-  }
-
-  static void _collectRequiredFiles(
-    Map<String, ExpectedDir> dirs,
-    String pathPrefix,
-    List<String> out,
-  ) {
-    for (final entry in dirs.entries) {
-      final dir = entry.value;
-      // 不要と宣言された層([] 宣言)のファイルは生成しない
-      if (!dir.required) continue;
-      final dirPath = '$pathPrefix/${entry.key}';
-      for (final file in dir.requiredFiles) {
-        out.add('$dirPath/$file');
-      }
-      _collectRequiredFiles(dir.children, dirPath, out);
-    }
   }
 }
 
