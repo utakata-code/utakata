@@ -183,6 +183,22 @@ packages/utakata_code/lib/src/
 └── 3_application/     # コマンドハンドラ・Runner・プレゼンター・MCP サーバー
 ```
 
+### 単体の実行ファイルと同梱ファイル
+
+`dart compile exe bin/utakata.dart` で 1 つの実行ファイルにできます。実行ファイルからはパッケージの場所が分からないため、実行時に読むファイル(`lib/src/0_templates/**` と `doc/*.md`)を `lib/src/bundled_assets.g.dart` に埋め込み、初回に `~/.utakata/cache/bundled-<版>/` へ書き出して使います。
+
+同梱ファイルは次の順で探します:
+
+1. 環境変数 `UTAKATA_ASSETS_DIR` — パッケージルートと同じ並び(`lib/src/0_templates/`, `doc/`)のディレクトリ
+2. パッケージのディレクトリ(`dart run` / `dart pub global activate`)
+3. 上記の埋め込み版
+
+`lib/src/0_templates/` 配下(`tool/sync_arch_lib.dart` での同期を含む)や `doc/*.md` を変えたら、埋め込み版を作り直してください(古いままだとテストが落ちます):
+
+```sh
+dart run tool/generate_bundled_assets.dart
+```
+
 ---
 
 ## ライセンス
