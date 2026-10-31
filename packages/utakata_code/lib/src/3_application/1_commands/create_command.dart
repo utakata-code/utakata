@@ -7,6 +7,7 @@ import '../../1_domain/messages/cli_messages.dart';
 import '../../1_domain/services/case_converter.dart';
 import 'base_command.dart';
 import 'logger.dart';
+import 'mcp_destination_options.dart';
 
 /// utakata create — Flutter プロジェクトを新規作成する
 class CreateCommand extends BaseCommand {
@@ -35,7 +36,8 @@ class CreateCommand extends BaseCommand {
           help: _msg.optDescription)
       ..addOption('arch',
           defaultsTo: 'clean_architecture',
-          help: _msg.optArch);
+          help: _msg.optArch)
+      ..addMcpDestinationOptions(_msg);
   }
 
   @override
@@ -44,6 +46,9 @@ class CreateCommand extends BaseCommand {
       Logger.error(_msg.missingAppName);
       return 1;
     }
+
+    final mcp = parseMcpDestination(argResults!, _msg);
+    if (mcp == null) return 64; // EX_USAGE
 
     final appName = argResults!.rest.first;
     final projectName = CaseConverter.toSnakeCase(p.basename(appName));
@@ -60,7 +65,7 @@ class CreateCommand extends BaseCommand {
     );
 
     await _usecase.execute(spec);
-    final claude = await _claudeUsecase.execute(appName);
+    final claude = await _claudeUsecase.execute(appName, mcp: mcp);
     for (final path in claude.invalidJson) {
       Logger.warn(_msg.claudeInitInvalidJson(path));
     }

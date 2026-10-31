@@ -719,12 +719,49 @@ class JaMessages implements CliMessages {
   String get optClaudeOnly =>
       '指定した対象だけを再生成する(既存も上書き。複数指定可: --only skills,agents)。'
       'skills = .claude/skills/utakata-*、agents = .claude/agents/、'
-      'mcp = .mcp.json(utakata のエントリだけ追加・置換)、'
+      'mcp = .mcp.json(--mcp-name のエントリだけ追加・置換。既定 utakata)、'
       'settings = .claude/settings.json(上書き)、claude-md = CLAUDE.md(上書き)';
   @override
   String claudeInitInvalidJson(String path) =>
       '$path が JSON として読めない(または mcpServers がオブジェクトでない)ため、'
       '書き込みませんでした。内容を直してから再実行してください。';
+  @override
+  String get optMcp =>
+      '.mcp.json に書く MCP の行き先。stdio = `utakata mcp` を起動する(既定)、'
+      'http = --mcp-url の HTTP サーバーを指す、none = .mcp.json に触れない。'
+      '--mcp-url だけを指定したときは http とみなす';
+  @override
+  String get optMcpUrl =>
+      'HTTP の MCP サーバーの URL(--mcp=http で必須)。そのまま書くので '
+      "'\${MIDE_MCP_URL}' のように環境変数を書けば Claude Code が展開する";
+  @override
+  String get optMcpHeader =>
+      "HTTP の MCP サーバーに送るヘッダー('Name: value'。複数指定可。--mcp=http のときだけ)。"
+      "値はそのまま書く(例: 'Authorization: Bearer \${TOKEN}')";
+  @override
+  String get optMcpName =>
+      '.mcp.json の mcpServers で utakata が追加・置換するキー(既定: utakata)。'
+      '他のキーは残す';
+  @override
+  String get mcpUrlRequired => '--mcp=http には --mcp-url <url> が必要です。';
+  @override
+  String mcpUrlNeedsHttp(String transport) =>
+      '--mcp-url は --mcp=http のときだけ指定できます(--mcp=$transport が指定されています)。';
+  @override
+  String mcpHeaderNeedsHttp(String transport) =>
+      '--mcp-header は --mcp=http(または --mcp-url)のときだけ指定できます'
+      '(--mcp=$transport になっています)。';
+  @override
+  String mcpHeaderInvalid(String header) =>
+      "--mcp-header は 'Name: value' の形で指定してください: $header";
+  @override
+  String get mcpNameWithNone =>
+      '--mcp=none では .mcp.json に触れないため、--mcp-name は指定できません。';
+  @override
+  String get mcpNameEmpty => '--mcp-name が空です。';
+  @override
+  String get claudeInitMcpNone =>
+      '--mcp=none のため .mcp.json には触れません(--only mcp は何もしません)。';
   @override
   String get optUpdateRef => 'ref を再解決して更新する';
   @override

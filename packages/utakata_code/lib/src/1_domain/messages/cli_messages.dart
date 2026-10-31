@@ -346,6 +346,17 @@ abstract interface class CliMessages {
   String get optForceRegenerate;
   String get optClaudeOnly;
   String claudeInitInvalidJson(String path);
+  String get optMcp;
+  String get optMcpUrl;
+  String get optMcpHeader;
+  String get optMcpName;
+  String get mcpUrlRequired;
+  String mcpUrlNeedsHttp(String transport);
+  String mcpHeaderNeedsHttp(String transport);
+  String mcpHeaderInvalid(String header);
+  String get mcpNameWithNone;
+  String get mcpNameEmpty;
+  String get claudeInitMcpNone;
   String get optUpdateRef;
   String get optExpandDryRun;
   String get optExpandFeature;

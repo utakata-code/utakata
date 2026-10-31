@@ -113,7 +113,7 @@ features:
 |---|---|
 | `utakata doc init` | Flutter プロジェクト本体より先に `doc/` ワークスペース(specs/records/preview/impl/knowledge/archive)+ `utakata.yaml` を作成する |
 | `utakata doc show <config\|plan\|imports\|records\|impl>` / `utakata doc list` | `utakata.yaml` / `doc/specs/plan.yaml` / `import_rules` / 記録の扱いのリファレンスを表示する(インストール済みバージョンに対応。MCP の `doc_get` でも取得可能) |
-| `utakata create <name> [--org] [--platforms] [--arch]` | 選択したアーキテクチャで Flutter プロジェクトを新規作成し、`.mcp.json` + `.claude/` も生成する |
+| `utakata create <name> [--org] [--platforms] [--arch] [--mcp ...]` | 選択したアーキテクチャで Flutter プロジェクトを新規作成し、`.mcp.json` + `.claude/` も生成する。`claude init` と同じ `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` を受け付ける([MCP の行き先](#mcp-の行き先)) |
 | `utakata doctor [--migrate]` | プロジェクトを診断する。`--migrate` は旧 `AI/` ベースのレイアウト(または独自運用の `doc/`)を現行レイアウトへ移行する |
 
 ### 構造
@@ -164,7 +164,7 @@ features:
 | `utakata mcp` | ステートレス・読み取り専用の MCP サーバーを stdio で起動する(`structure_get`・`check_run`・`plan_get`・`log_query`・`agreements_query`・`guide_get`・`guide_for_file`・`config_get`・`doc_get`・`vault_list`・`vault_get`、および `records.agent_read.messages` 有効時のみ `message_query`) |
 | `utakata vault list\|show\|get` | クライアント説明用の実務ナレッジ Vault を参照する(`vault:` で設定。通常は `~/.utakata/config.yaml`) |
 | `utakata skills sync [--force]` | `utakata.yaml` の `skills` リストをアーキテクチャ同梱 SKILL から `.claude/skills/` に同期する(managed マーカー保護: 人間の作ったファイルは絶対に上書きしない) |
-| `utakata claude init [--only <対象>] [--force]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成。`--only skills` のように対象(`skills` / `agents` / `mcp` / `settings` / `claude-md`、複数可)を選ぶとそれだけを上書きで再生成。`--force` は全再生成で、`settings.json` と `CLAUDE.md` はファイルごと上書きされる。`.mcp.json` はどのモードでも `mcpServers.utakata` だけを追加・置換し、他のサーバーは残す |
+| `utakata claude init [--only <対象>] [--force] [--mcp ...]` | 既存プロジェクトに Claude Code 統合(`.claude/` + `.mcp.json` + `CLAUDE.md`)を後付け・補修する。既定は欠けているファイルのみ生成。`--only skills` のように対象(`skills` / `agents` / `mcp` / `settings` / `claude-md`、複数可)を選ぶとそれだけを上書きで再生成。`--force` は全再生成で、`settings.json` と `CLAUDE.md` はファイルごと上書きされる。`.mcp.json` はどのモードでも `mcpServers.utakata`(または `--mcp-name` のキー)だけを追加・置換し、他のサーバーは残す。そのエントリの行き先は `--mcp` / `--mcp-url` / `--mcp-header` / `--mcp-name` で選ぶ([MCP の行き先](#mcp-の行き先)) |
 
 `diff` は `check` への永続的なエイリアスとして残ります。`scan`・`validate`・`feature init`・`core`・`arch create` は削除・改名されました。詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
@@ -180,6 +180,41 @@ features:
 - **deny ルール**: `doc/records/**` と `doc/preview/**` への `Edit`/`Write` を拒否 — 会話ログ・合意の書き込み経路は人間専用であり、ドキュメント上の約束ではなくホスト側で技術的に強制されます
 
 ファイルを手動で作成せず、`utakata` CLI でプロジェクト構造を拡張してください。コミット前に `utakata check` を実行することを推奨します。
+
+### MCP の行き先
+
+既定の `.mcp.json` は `utakata mcp` を stdio で起動します。MCP を別の場所が出している(HTTP で MCP を出す IDE など)とき、または MCP クライアントから見て `utakata` が `PATH` に無いときは、`claude init` / `create` のフラグで行き先を選べます。
+
+| オプション | 意味 |
+|---|---|
+| `--mcp=stdio\|http\|none` | `stdio`(既定)= `{"command": "utakata", "args": ["mcp"]}`。`http` = `{"type": "http", "url": ..., "headers": {...}}`。`none` = `.mcp.json` に一切触れない(`--only mcp` も何もしない) |
+| `--mcp-url <url>` | `http` の URL(必須)。`--mcp-url` だけを指定したときは `--mcp=http` とみなす。そのまま書くので、`${VAR}` は Claude Code が環境変数で展開する |
+| `--mcp-header 'Name: value'` | `http` のヘッダー(複数可)。最初の `:` で分けて前後の空白を除く。指定が無ければ `headers` は書かない |
+| `--mcp-name <name>` | `mcpServers` で utakata が追加・置換するキー(既定 `utakata`)。他のサーバーは残す |
+
+矛盾する組み合わせ(URL の無い `--mcp=http`、`stdio` / `none` と `--mcp-url` / `--mcp-header`、`none` と `--mcp-name`、`:` の無いヘッダー)は何も書かずに終了コード 64 で終わります。
+
+```bash
+# IDE が HTTP で出す MCP を指す。${...} は Claude Code が展開する
+utakata claude init --only mcp \
+  --mcp-url '${MIDE_MCP_URL}' \
+  --mcp-header 'Authorization: Bearer ${MIDE_MCP_TOKEN}' \
+  --mcp-name mobile-ide
+```
+
+```json
+{
+  "mcpServers": {
+    "mobile-ide": {
+      "type": "http",
+      "url": "${MIDE_MCP_URL}",
+      "headers": { "Authorization": "Bearer ${MIDE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+これらのフラグが変えるのは `.mcp.json` だけです。`.claude/settings.json` のフックとスキルは引き続き `utakata` CLI を呼びます(utakata の MCP は読み取り専用で、`impl new` / `log add` / `apply` などの書き込みには CLI が要るため)。`http` / `none` にしても、フックから `utakata` を呼べるようにしておいてください。選んだ行き先はどこにも保存しないため、後で `.mcp.json` を再生成するとき(`--force` / `--only mcp`)は同じフラグを付け直してください(付けないと既定の stdio の `mcpServers.utakata` が足されます)。
 
 ---
 
